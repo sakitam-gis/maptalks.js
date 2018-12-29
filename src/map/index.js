@@ -16,5 +16,6 @@ import './Map.Topo';
 import './Map.Zoom';
 import './Map.Camera';
 import './Map.ViewHistory';
+import './Map.Collision';
 
 export { Map };
