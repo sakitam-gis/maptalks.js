@@ -73,6 +73,10 @@ import SpatialReference from './spatial-reference/SpatialReference';
  * @property {Number[]}       [options.fogColor=[233, 233, 233]]        - color of fog: [r, g, b]
  *
  * @property {String} [options.renderer=canvas]                 - renderer type. Don't change it if you are not sure about it. About renderer, see [TODO]{@link tutorial.renderer}.
+ *
+ * @property {String} [options.collisionPadding=100]                   - view padding of map scope collision index in px.
+ * @property {Boolean} [options.collisionAutoClear=true]               - auto clear collision index at the beggining of every frame.
+ *
  * @memberOf Map
  * @instance
  */
