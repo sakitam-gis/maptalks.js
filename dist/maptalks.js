@@ -1310,7 +1310,7 @@
   function _inheritsLoose(subClass, superClass) {
     subClass.prototype = Object.create(superClass.prototype);
     subClass.prototype.constructor = subClass;
-    subClass.__proto__ = superClass;
+    if (typeof document !== 'undefined' && document.documentMode < 11) { _defaults(subClass, superClass); } else { subClass.__proto__ = superClass;}
   }
 
   function _assertThisInitialized(self) {
