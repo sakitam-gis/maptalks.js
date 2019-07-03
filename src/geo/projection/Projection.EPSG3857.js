@@ -52,6 +52,8 @@ export default extend({}, Common, /** @lends projection.EPSG3857 */ {
             c = y / metersPerDegree;
             c = (2 * Math.atan(Math.exp(c * rad)) - Math.PI / 2) / rad;
         }
-        return new Coordinate(wrap(x / metersPerDegree, -180, 180), wrap(c, -this.maxLatitude, this.maxLatitude));
+        // return new Coordinate(wrap(x / metersPerDegree, -180, 180), wrap(c, -this.maxLatitude, this.maxLatitude));
+        // FIXME: sakitam-fdd - config wrap coordinates
+        return new Coordinate(x / metersPerDegree, c);
     }
 }, WGS84Sphere);

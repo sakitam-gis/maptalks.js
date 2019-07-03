@@ -5100,8 +5100,8 @@
       var wrapped = new Coordinate(pcoord);
 
       if (!extent.contains(wrapped)) {
-        wrapped.x = wrap(pcoord.x, extent.xmin, extent.xmax);
-        wrapped.y = wrap(pcoord.y, extent.ymin, extent.ymax);
+        wrapped.x = pcoord.x;
+        wrapped.y = pcoord.y;
       }
 
       return wrapped;
@@ -5497,7 +5497,7 @@
         c = (2 * Math.atan(Math.exp(c * rad)) - Math.PI / 2) / rad;
       }
 
-      return new Coordinate(wrap(x / metersPerDegree, -180, 180), wrap(c, -this.maxLatitude, this.maxLatitude));
+      return new Coordinate(x / metersPerDegree, c);
     }
   }, WGS84Sphere);
 

@@ -132,8 +132,11 @@ export default /** @lends projection.Common */ {
         const extent = this.getSphereExtent();
         const wrapped = new Coordinate(pcoord);
         if (!extent.contains(wrapped)) {
-            wrapped.x = wrap(pcoord.x, extent.xmin, extent.xmax);
-            wrapped.y = wrap(pcoord.y, extent.ymin, extent.ymax);
+            // wrapped.x = wrap(pcoord.x, extent.xmin, extent.xmax);
+            // wrapped.y = wrap(pcoord.y, extent.ymin, extent.ymax);
+            // FIXME: sakitam-fdd - config wrap coordinates
+            wrapped.x = pcoord.x;
+            wrapped.y = pcoord.y;
         }
         return wrapped;
     },
