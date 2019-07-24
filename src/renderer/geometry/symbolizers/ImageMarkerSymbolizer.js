@@ -82,6 +82,10 @@ export default class ImageMarkerSymbolizer extends PointSymbolizer {
         if (alpha !== undefined) {
             ctx.globalAlpha = alpha;
         }
+
+        if ('replaceColor' in this.style) {
+            this.replaceColor_();
+        }
     }
 
     _getImage(resources) {
@@ -141,5 +145,31 @@ export default class ImageMarkerSymbolizer extends PointSymbolizer {
             'markerHorizontalAlignment': getValueOrDefault(s['markerHorizontalAlignment'], 'middle'), //left | middle | right
             'markerVerticalAlignment': getValueOrDefault(s['markerVerticalAlignment'], 'top'), // top | middle | bottom
         };
+    }
+
+    replaceColor_(ctx) {
+        if (!this.style.replaceColor) {
+            return;
+        }
+        const color = this.style.replaceColor;
+        //
+        // this.canvas_.width = this.image_.width;
+        // this.canvas_.height = this.image_.height;
+        //
+        // const ctx = this.canvas_.getContext('2d');
+        // ctx.drawImage(this.image_, 0, 0);
+
+        const imgData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const data = imgData.data;
+        const r = color[0] / 255.0;
+        const g = color[1] / 255.0;
+        const b = color[2] / 255.0;
+
+        for (let i = 0, ii = data.length; i < ii; i += 4) {
+            data[i] *= r;
+            data[i + 1] *= g;
+            data[i + 2] *= b;
+        }
+        ctx.putImageData(imgData, 0, 0);
     }
 }

@@ -4502,6 +4502,13 @@ CRS.EPSG4490 = CRS.CGCS2000;
 CRS.BD09LL = CRS.createProj4('+proj=longlat +datum=BD09');
 CRS.GCJ02 = CRS.createProj4('+proj=longlat +datum=GCJ02');
 
+var TEMP_POINT0 = new Point(0, 0);
+var TEMP_COORD0 = new Coordinate(0, 0);
+var TEMP_COORD1 = new Coordinate(0, 0);
+var MINMAX = [];
+var TEMP_EXTENT;
+var TEMP_COMBINE = [];
+
 var Extent = function () {
   function Extent(p1, p2, p3, p4) {
     this._clazz = Coordinate;
@@ -4533,36 +4540,21 @@ var Extent = function () {
 
     if (isNumber(p1) && isNumber(p2) && isNumber(p3) && isNumber(p4)) {
       if (projection) {
-        this['xmin'] = p1;
-        this['ymin'] = p2;
-        this['xmax'] = p3;
-        this['ymax'] = p4;
+        this.set(p1, p2, p3, p4);
       } else {
-        this['xmin'] = Math.min(p1, p3);
-        this['ymin'] = Math.min(p2, p4);
-        this['xmax'] = Math.max(p1, p3);
-        this['ymax'] = Math.max(p2, p4);
+        this.set(Math.min(p1, p3), Math.min(p2, p4), Math.max(p1, p3), Math.max(p2, p4));
       }
 
       return;
     } else if (Array.isArray(p1)) {
       if (projection) {
-        this['xmin'] = p1[0];
-        this['ymin'] = p1[1];
-        this['xmax'] = p1[2];
-        this['ymax'] = p1[3];
+        this.set(p1[0], p1[1], p1[2], p1[3]);
       } else {
-        this['xmin'] = Math.min(p1[0], p1[2]);
-        this['ymin'] = Math.min(p1[1], p1[3]);
-        this['xmax'] = Math.max(p1[0], p1[2]);
-        this['ymax'] = Math.max(p1[1], p1[3]);
+        this.set(Math.min(p1[0], p1[2]), Math.min(p1[1], p1[3]), Math.max(p1[0], p1[2]), Math.max(p1[1], p1[3]));
       }
     } else if (isNumber(p1.x) && isNumber(p2.x) && isNumber(p1.y) && isNumber(p2.y)) {
       if (projection) {
-        this['xmin'] = p1.x;
-        this['ymin'] = p1.y;
-        this['xmax'] = p2.x;
-        this['ymax'] = p2.y;
+        this.set(p1.x, p1.y, p2.x, p2.y);
       } else {
         if (p1.x > p2.x) {
           this['xmin'] = p2.x;
@@ -4581,10 +4573,7 @@ var Extent = function () {
         }
       }
     } else if (isNumber(p1['xmin']) && isNumber(p1['xmax']) && isNumber(p1['ymin']) && isNumber(p1['ymax'])) {
-      this['xmin'] = p1['xmin'];
-      this['ymin'] = p1['ymin'];
-      this['xmax'] = p1['xmax'];
-      this['ymax'] = p1['ymax'];
+      this.set(p1['xmin'], p1['ymin'], p1['xmax'], p1['ymax']);
     }
   };
 
@@ -4614,6 +4603,15 @@ var Extent = function () {
   _proto.add = function add() {
     var e = new this.constructor(this['xmin'], this['ymin'], this['xmax'], this['ymax'], this.projection);
     return e._add.apply(e, arguments);
+  };
+
+  _proto._scale = function _scale(s) {
+    this._dirty = true;
+    this['xmin'] *= s;
+    this['ymin'] *= s;
+    this['xmax'] *= s;
+    this['ymax'] *= s;
+    return this;
   };
 
   _proto._sub = function _sub(p) {
@@ -4678,7 +4676,7 @@ var Extent = function () {
   };
 
   _proto.isValid = function isValid() {
-    return isNumber(this['xmin']) && isNumber(this['ymin']) && isNumber(this['xmax']) && isNumber(this['ymax']);
+    return !isNil(this['xmin']) && !isNil(this['ymin']) && !isNil(this['xmax']) && !isNil(this['ymax']);
   };
 
   _proto.equals = function equals(ext2) {
@@ -4715,15 +4713,25 @@ var Extent = function () {
 
     var proj = this.projection;
 
-    if (Array.isArray(c)) {
-      c = new this._clazz(c);
-    }
-
     if (proj) {
-      c = proj.project(c);
+      if (c.x !== undefined) {
+        var coord = TEMP_COORD0;
+
+        if (Array.isArray(c)) {
+          coord.x = c[0];
+          coord.y = c[1];
+        } else {
+          coord.x = c.x;
+          coord.y = c.y;
+        }
+
+        c = proj.project(coord, coord);
+      } else if (c.xmin !== undefined) {
+        this._project(c);
+      }
     }
 
-    return c.x >= this.pxmin && c.x <= this.pxmax && c.y >= this.pymin && c.y <= this.pymax;
+    return (c.x || c.pxmin || 0) >= this.pxmin && (c.x || c.pxmax || 0) <= this.pxmax && (c.y || c.pymin || 0) >= this.pymin && (c.y || c.pymax || 0) <= this.pymax;
   };
 
   _proto.getWidth = function getWidth() {
@@ -4738,86 +4746,76 @@ var Extent = function () {
     return new Size(this.getWidth(), this.getHeight());
   };
 
+  _proto.set = function set(xmin, ymin, xmax, ymax) {
+    this.xmin = xmin;
+    this.ymin = ymin;
+    this.xmax = xmax;
+    this.ymax = ymax;
+    return this;
+  };
+
   _proto.__combine = function __combine(extent) {
-    if (!(extent instanceof this.constructor)) {
-      extent = new this.constructor(extent, extent);
+    if (extent.x !== undefined) {
+      TEMP_EXTENT.xmin = TEMP_EXTENT.xmax = extent.x;
+      TEMP_EXTENT.ymin = TEMP_EXTENT.ymax = extent.y;
+      extent = TEMP_EXTENT;
     }
 
     this._project(extent);
 
     this._project(this);
 
-    var xmin = this['pxmin'];
+    var inited = isNumber(this.pxmin);
+    var xmin, ymin, xmax, ymax;
 
-    if (!isNumber(xmin)) {
+    if (!inited) {
       xmin = extent['pxmin'];
-    } else if (isNumber(extent['pxmin'])) {
-      if (xmin > extent['pxmin']) {
-        xmin = extent['pxmin'];
-      }
-    }
-
-    var xmax = this['pxmax'];
-
-    if (!isNumber(xmax)) {
-      xmax = extent['pxmax'];
-    } else if (isNumber(extent['pxmax'])) {
-      if (xmax < extent['pxmax']) {
-        xmax = extent['pxmax'];
-      }
-    }
-
-    var ymin = this['pymin'];
-
-    if (!isNumber(ymin)) {
       ymin = extent['pymin'];
-    } else if (isNumber(extent['pymin'])) {
-      if (ymin > extent['pymin']) {
-        ymin = extent['pymin'];
-      }
-    }
-
-    var ymax = this['pymax'];
-
-    if (!isNumber(ymax)) {
+      xmax = extent['pxmax'];
       ymax = extent['pymax'];
-    } else if (isNumber(extent['pymax'])) {
-      if (ymax < extent['pymax']) {
-        ymax = extent['pymax'];
-      }
+    } else {
+      xmin = Math.min(this['pxmin'], extent['pxmin']);
+      ymin = Math.min(this['pymin'], extent['pymin']);
+      xmax = Math.max(this['pxmax'], extent['pxmax']);
+      ymax = Math.max(this['pymax'], extent['pymax']);
     }
 
     var proj = this.projection;
 
     if (proj) {
-      var min = proj.unproject(new this._clazz(xmin, ymin)),
-          max = proj.unproject(new this._clazz(xmax, ymax));
+      TEMP_COORD0.x = xmin;
+      TEMP_COORD0.y = ymin;
+      TEMP_COORD1.x = xmax;
+      TEMP_COORD1.y = ymax;
+      var min = proj.unproject(TEMP_COORD0, TEMP_COORD0),
+          max = proj.unproject(TEMP_COORD1, TEMP_COORD1);
       xmin = min.x;
       ymin = min.y;
       xmax = max.x;
       ymax = max.y;
     }
 
-    return [xmin, ymin, xmax, ymax];
+    TEMP_COMBINE[0] = xmin;
+    TEMP_COMBINE[1] = ymin;
+    TEMP_COMBINE[2] = xmax;
+    TEMP_COMBINE[3] = ymax;
+    return TEMP_COMBINE;
   };
 
   _proto._combine = function _combine(extent) {
-    if (!extent) {
+    if (!extent || extent.isValid && !extent.isValid()) {
       return this;
     }
 
     var ext = this.__combine(extent);
 
-    this['xmin'] = ext[0];
-    this['ymin'] = ext[1];
-    this['xmax'] = ext[2];
-    this['ymax'] = ext[3];
+    this.set(ext[0], ext[1], ext[2], ext[3]);
     this._dirty = true;
     return this;
   };
 
   _proto.combine = function combine(extent) {
-    if (!extent) {
+    if (!extent || extent.isValid && !extent.isValid()) {
       return this;
     }
 
@@ -4831,13 +4829,17 @@ var Extent = function () {
       return null;
     }
 
-    var min = new this._clazz(Math.max(this['pxmin'], extent['pxmin']), Math.max(this['pymin'], extent['pymin'])),
-        max = new this._clazz(Math.min(this['pxmax'], extent['pxmax']), Math.min(this['pymax'], extent['pymax']));
+    TEMP_COORD0.x = Math.max(this['pxmin'], extent['pxmin']);
+    TEMP_COORD0.y = Math.max(this['pymin'], extent['pymin']);
+    TEMP_COORD1.x = Math.min(this['pxmax'], extent['pxmax']);
+    TEMP_COORD1.y = Math.min(this['pymax'], extent['pymax']);
+    var min = TEMP_COORD0,
+        max = TEMP_COORD1;
     var proj = this.projection;
 
     if (proj) {
-      min = proj.unproject(min);
-      max = proj.unproject(max);
+      min = proj.unproject(min, min);
+      max = proj.unproject(max, max);
     }
 
     return new this.constructor(min, max, proj);
@@ -4899,13 +4901,27 @@ var Extent = function () {
     return new this.constructor(this['xmin'], this['ymin'], this['xmax'], this['ymax'], this.projection);
   };
 
-  _proto.convertTo = function convertTo(fn) {
+  _proto.convertTo = function convertTo(fn, out) {
     if (!this.isValid()) {
       return null;
     }
 
-    var e = new this.constructor();
-    var coord = new this._clazz(this.xmin, this.ymax);
+    var e = out || new this.constructor();
+
+    if (out) {
+      e.xmin = e.ymin = e.xmax = e.ymax = 0;
+    }
+
+    var coord;
+
+    if (this._clazz === Coordinate) {
+      coord = TEMP_COORD0;
+    } else if (this._clazz === Point) {
+      coord = TEMP_POINT0;
+    }
+
+    coord.x = this.xmin;
+    coord.y = this.ymax;
 
     e._combine(fn(coord));
 
@@ -4933,8 +4949,13 @@ var Extent = function () {
 
     if (proj) {
       if (ext._dirty) {
-        var minmax = [new Coordinate(ext.xmax, ext.ymin), new Coordinate(ext.xmin, ext.ymax)];
-        minmax = proj.projectCoords(minmax);
+        TEMP_COORD0.x = ext.xmax;
+        TEMP_COORD0.y = ext.ymin;
+        TEMP_COORD1.x = ext.xmin;
+        TEMP_COORD1.y = ext.ymax;
+        MINMAX[0] = TEMP_COORD0;
+        MINMAX[1] = TEMP_COORD1;
+        var minmax = proj.projectCoords(MINMAX);
         var min = minmax[0],
             max = minmax[1];
         ext.pxmin = Math.min(min.x, max.x);
@@ -4954,6 +4975,8 @@ var Extent = function () {
 
   return Extent;
 }();
+
+TEMP_EXTENT = new Extent(0, 0, 0, 0);
 
 var PointExtent = function (_Extent) {
   _inheritsLoose(PointExtent, _Extent);
@@ -4976,12 +4999,30 @@ var Transformation = function () {
 
   var _proto = Transformation.prototype;
 
-  _proto.transform = function transform(coordinates, scale) {
-    return new Point(this.matrix[0] * (coordinates.x - this.matrix[2]) / scale, this.matrix[1] * (coordinates.y - this.matrix[3]) / scale);
+  _proto.transform = function transform(coordinates, scale, out) {
+    var x = this.matrix[0] * (coordinates.x - this.matrix[2]) / scale;
+    var y = this.matrix[1] * (coordinates.y - this.matrix[3]) / scale;
+
+    if (out) {
+      out.x = x;
+      out.y = y;
+      return out;
+    }
+
+    return new Point(x, y);
   };
 
-  _proto.untransform = function untransform(point, scale) {
-    return new Coordinate(point.x * scale / this.matrix[0] + this.matrix[2], point.y * scale / this.matrix[1] + this.matrix[3]);
+  _proto.untransform = function untransform(point, scale, out) {
+    var x = point.x * scale / this.matrix[0] + this.matrix[2];
+    var y = point.y * scale / this.matrix[1] + this.matrix[3];
+
+    if (out) {
+      out.x = x;
+      out.y = y;
+      return out;
+    }
+
+    return new Coordinate(x, y);
   };
 
   return Transformation;
@@ -5461,7 +5502,7 @@ var EPSG3857 = extend({}, Common, {
   rad: Math.PI / 180,
   metersPerDegree: 6378137 * Math.PI / 180,
   maxLatitude: 85.0511287798,
-  project: function project(lnglat) {
+  project: function project(lnglat, out) {
     var rad = this.rad,
         metersPerDegree = this.metersPerDegree,
         max = this.maxLatitude;
@@ -5475,9 +5516,18 @@ var EPSG3857 = extend({}, Common, {
       c = Math.log(Math.tan((90 + lat) * rad / 2)) / rad;
     }
 
-    return new Coordinate(lng * metersPerDegree, c * metersPerDegree);
+    var x = lng * metersPerDegree;
+    var y = c * metersPerDegree;
+
+    if (out) {
+      out.x = x;
+      out.y = y;
+      return out;
+    }
+
+    return new Coordinate(x, y);
   },
-  unproject: function unproject(pLnglat) {
+  unproject: function unproject(pLnglat, out) {
     var x = pLnglat.x,
         y = pLnglat.y;
     var rad = this.rad,
@@ -5491,16 +5541,37 @@ var EPSG3857 = extend({}, Common, {
       c = (2 * Math.atan(Math.exp(c * rad)) - Math.PI / 2) / rad;
     }
 
-    return new Coordinate(x / metersPerDegree, c);
+    var rx = x / metersPerDegree;
+    var ry = c;
+
+    if (out) {
+      out.x = rx;
+      out.y = ry;
+      return out;
+    }
+
+    return new Coordinate(rx, ry);
   }
 }, WGS84Sphere);
 
 var PROJ4326 = extend({}, Common, {
   code: 'EPSG:4326',
-  project: function project(p) {
+  project: function project(p, out) {
+    if (out) {
+      out.x = p.x;
+      out.y = p.y;
+      return out;
+    }
+
     return new Coordinate(p);
   },
-  unproject: function unproject(p) {
+  unproject: function unproject(p, out) {
+    if (out) {
+      out.x = p.x;
+      out.y = p.y;
+      return out;
+    }
+
     return new Coordinate(p);
   }
 }, WGS84Sphere);
@@ -5511,11 +5582,11 @@ var Projection_EPSG4490 = extend({}, PROJ4326, {
 
 var Projection_Baidu = extend({}, Common, {
   code: 'BAIDU',
-  project: function project(p) {
-    return this.convertLL2MC(p);
+  project: function project(p, out) {
+    return this.convertLL2MC(p, out);
   },
-  unproject: function unproject(p) {
-    return this.convertMC2LL(p);
+  unproject: function unproject(p, out) {
+    return this.convertMC2LL(p, out);
   }
 }, BaiduSphere, {
   EARTHRADIUS: 6370996.81,
@@ -5523,25 +5594,20 @@ var Projection_Baidu = extend({}, Common, {
   LLBAND: [75, 60, 45, 30, 15, 0],
   MC2LL: [[1.410526172116255e-8, 0.00000898305509648872, -1.9939833816331, 200.9824383106796, -187.2403703815547, 91.6087516669843, -23.38765649603339, 2.57121317296198, -0.03801003308653, 17337981.2], [-7.435856389565537e-9, 0.000008983055097726239, -0.78625201886289, 96.32687599759846, -1.85204757529826, -59.36935905485877, 47.40033549296737, -16.50741931063887, 2.28786674699375, 10260144.86], [-3.030883460898826e-8, 0.00000898305509983578, 0.30071316287616, 59.74293618442277, 7.357984074871, -25.38371002664745, 13.45380521110908, -3.29883767235584, 0.32710905363475, 6856817.37], [-1.981981304930552e-8, 0.000008983055099779535, 0.03278182852591, 40.31678527705744, 0.65659298677277, -4.44255534477492, 0.85341911805263, 0.12923347998204, -0.04625736007561, 4482777.06], [3.09191371068437e-9, 0.000008983055096812155, 0.00006995724062, 23.10934304144901, -0.00023663490511, -0.6321817810242, -0.00663494467273, 0.03430082397953, -0.00466043876332, 2555164.4], [2.890871144776878e-9, 0.000008983055095805407, -3.068298e-8, 7.47137025468032, -0.00000353937994, -0.02145144861037, -0.00001234426596, 0.00010322952773, -0.00000323890364, 826088.5]],
   LL2MC: [[-0.0015702102444, 111320.7020616939, 1704480524535203, -10338987376042340, 26112667856603880, -35149669176653700, 26595700718403920, -10725012454188240, 1800819912950474, 82.5], [0.0008277824516172526, 111320.7020463578, 647795574.6671607, -4082003173.641316, 10774905663.51142, -15171875531.51559, 12053065338.62167, -5124939663.577472, 913311935.9512032, 67.5], [0.00337398766765, 111320.7020202162, 4481351.045890365, -23393751.19931662, 79682215.47186455, -115964993.2797253, 97236711.15602145, -43661946.33752821, 8477230.501135234, 52.5], [0.00220636496208, 111320.7020209128, 51751.86112841131, 3796837.749470245, 992013.7397791013, -1221952.21711287, 1340652.697009075, -620943.6990984312, 144416.9293806241, 37.5], [-0.0003441963504368392, 111320.7020576856, 278.2353980772752, 2485758.690035394, 6070.750963243378, 54821.18345352118, 9540.606633304236, -2710.55326746645, 1405.483844121726, 22.5], [-0.0003218135878613132, 111320.7020701615, 0.00369383431289, 823725.6402795718, 0.46104986909093, 2351.343141331292, 1.58060784298199, 8.77738589078284, 0.37238884252424, 7.45]],
-  convertMC2LL: function convertMC2LL(cB) {
-    var cC = {
-      x: Math.abs(cB.x),
-      y: Math.abs(cB.y)
-    };
+  convertMC2LL: function convertMC2LL(cB, out) {
     var cE;
 
     for (var cD = 0, len = this.MCBAND.length; cD < len; cD++) {
-      if (cC.y >= this.MCBAND[cD]) {
+      if (Math.abs(cB.y) >= this.MCBAND[cD]) {
         cE = this.MC2LL[cD];
         break;
       }
     }
 
-    var T = this.convertor(cB, cE);
-    var result = new Coordinate(T.x, T.y);
-    return result;
+    var T = this.convertor(cB, cE, out);
+    return T;
   },
-  convertLL2MC: function convertLL2MC(T) {
+  convertLL2MC: function convertLL2MC(T, out) {
     var cD, cC, len;
     T.x = this.getLoop(T.x, -180, 180);
     T.y = this.getRange(T.y, -74, 74);
@@ -5563,11 +5629,10 @@ var Projection_Baidu = extend({}, Common, {
       }
     }
 
-    var cE = this.convertor(T, cD);
-    var result = new Coordinate(cE.x, cE.y);
-    return result;
+    var cE = this.convertor(T, cD, out);
+    return cE;
   },
-  convertor: function convertor(cC, cD) {
+  convertor: function convertor(cC, cD, out) {
     if (!cC || !cD) {
       return null;
     }
@@ -5577,6 +5642,13 @@ var Projection_Baidu = extend({}, Common, {
     var cE = cD[2] + cD[3] * cB + cD[4] * cB * cB + cD[5] * cB * cB * cB + cD[6] * cB * cB * cB * cB + cD[7] * cB * cB * cB * cB * cB + cD[8] * cB * cB * cB * cB * cB * cB;
     T *= cC.x < 0 ? -1 : 1;
     cE *= cC.y < 0 ? -1 : 1;
+
+    if (out) {
+      out.x = T;
+      out.y = cE;
+      return out;
+    }
+
     return new Coordinate(T, cE);
   },
   toRadians: function toRadians(T) {
@@ -5617,10 +5689,22 @@ var Projection_Baidu = extend({}, Common, {
 
 var Projection_IDENTITY = extend({}, Common, {
   code: 'IDENTITY',
-  project: function project(p) {
+  project: function project(p, out) {
+    if (out) {
+      out.x = p.x;
+      out.y = p.y;
+      return out;
+    }
+
     return p.copy();
   },
-  unproject: function unproject(p) {
+  unproject: function unproject(p, out) {
+    if (out) {
+      out.x = p.x;
+      out.y = p.y;
+      return out;
+    }
+
     return p.copy();
   }
 }, Identity);
@@ -7108,7 +7192,7 @@ var SpatialReference = function () {
 
     var res = this._resolutions[z];
 
-    if (!isInteger(zoom) && z !== this._resolutions.length - 1) {
+    if (z !== zoom && zoom > 0 && z < this._resolutions.length - 1) {
       var next = this._resolutions[z + 1];
       return res + (next - res) * (zoom - z);
     }
@@ -7535,6 +7619,8 @@ var Map$1 = function (_Handlerable) {
       return this;
     }
 
+    zoom = +zoom;
+
     if (this._loaded && this.options['zoomAnimation'] && options['animation']) {
       this._zoomAnimation(zoom);
     } else {
@@ -7561,6 +7647,7 @@ var Map$1 = function (_Handlerable) {
 
     if (maxZoom !== null && maxZoom < this._zoomLevel) {
       this.setZoom(maxZoom);
+      maxZoom = +maxZoom;
     }
 
     this.options['maxZoom'] = maxZoom;
@@ -7577,6 +7664,8 @@ var Map$1 = function (_Handlerable) {
 
   _proto.setMinZoom = function setMinZoom(minZoom) {
     if (minZoom !== null) {
+      minZoom = +minZoom;
+
       var viewMinZoom = this._spatialReference.getMinZoom();
 
       if (minZoom < viewMinZoom) {
@@ -8727,34 +8816,48 @@ var Map$1 = function (_Handlerable) {
     return this._spatialReference.getResolutions();
   };
 
-  _proto._prjToPoint = function _prjToPoint(pCoord, zoom) {
+  _proto._prjToPoint = function _prjToPoint(pCoord, zoom, out) {
     zoom = isNil(zoom) ? this.getZoom() : zoom;
-    return this._spatialReference.getTransformation().transform(pCoord, this._getResolution(zoom));
+    return this._spatialReference.getTransformation().transform(pCoord, this._getResolution(zoom), out);
   };
 
-  _proto._pointToPrj = function _pointToPrj(point, zoom) {
+  _proto._pointToPrj = function _pointToPrj(point, zoom, out) {
     zoom = isNil(zoom) ? this.getZoom() : zoom;
-    return this._spatialReference.getTransformation().untransform(point, this._getResolution(zoom));
+    return this._spatialReference.getTransformation().untransform(point, this._getResolution(zoom), out);
   };
 
-  _proto._pointToPoint = function _pointToPoint(point, zoom) {
-    if (!isNil(zoom)) {
-      return point.multi(this._getResolution(zoom) / this._getResolution());
+  _proto._pointToPoint = function _pointToPoint(point, zoom, out) {
+    if (out) {
+      out.x = point.x;
+      out.y = point.y;
+    } else {
+      out = point.copy();
     }
 
-    return point.copy();
-  };
-
-  _proto._pointToPointAtZoom = function _pointToPointAtZoom(point, zoom) {
     if (!isNil(zoom)) {
-      return point.multi(this._getResolution() / this._getResolution(zoom));
+      return out._multi(this._getResolution(zoom) / this._getResolution());
     }
 
-    return point.copy();
+    return out;
   };
 
-  _proto._containerPointToPrj = function _containerPointToPrj(containerPoint) {
-    return this._pointToPrj(this._containerPointToPoint(containerPoint));
+  _proto._pointToPointAtZoom = function _pointToPointAtZoom(point, zoom, out) {
+    if (out) {
+      out.x = point.x;
+      out.y = point.y;
+    } else {
+      out = point.copy();
+    }
+
+    if (!isNil(zoom)) {
+      return out._multi(this._getResolution() / this._getResolution(zoom));
+    }
+
+    return out;
+  };
+
+  _proto._containerPointToPrj = function _containerPointToPrj(containerPoint, out) {
+    return this._pointToPrj(this._containerPointToPoint(containerPoint, undefined, out), undefined, out);
   };
 
   _proto._viewPointToPrj = function _viewPointToPrj(viewPoint) {
@@ -9410,7 +9513,9 @@ var PointSymbolizer = function (_CanvasSymbolizer) {
   };
 
   _proto._getRenderPoints = function _getRenderPoints() {
-    return this.getPainter().getRenderPoints(this.getPlacement());
+    var painter = this.getPainter();
+    var placement = painter.isSpriting() ? 'center' : this.getPlacement();
+    return this.getPainter().getRenderPoints(placement);
   };
 
   _proto._getRenderContainerPoints = function _getRenderContainerPoints(ignoreAltitude) {
@@ -10096,6 +10201,10 @@ var ImageMarkerSymbolizer = function (_PointSymbolizer) {
     if (alpha !== undefined) {
       ctx.globalAlpha = alpha;
     }
+
+    if ('replaceColor' in this.style) {
+      this.replaceColor_();
+    }
   };
 
   _proto._getImage = function _getImage(resources) {
@@ -10158,6 +10267,27 @@ var ImageMarkerSymbolizer = function (_PointSymbolizer) {
       'markerHorizontalAlignment': getValueOrDefault(s['markerHorizontalAlignment'], 'middle'),
       'markerVerticalAlignment': getValueOrDefault(s['markerVerticalAlignment'], 'top')
     };
+  };
+
+  _proto.replaceColor_ = function replaceColor_(ctx) {
+    if (!this.style.replaceColor) {
+      return;
+    }
+
+    var color = this.style.replaceColor;
+    var imgData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+    var data = imgData.data;
+    var r = color[0] / 255.0;
+    var g = color[1] / 255.0;
+    var b = color[2] / 255.0;
+
+    for (var i = 0, ii = data.length; i < ii; i += 4) {
+      data[i] *= r;
+      data[i + 1] *= g;
+      data[i + 2] *= b;
+    }
+
+    ctx.putImageData(imgData, 0, 0);
   };
 
   return ImageMarkerSymbolizer;
@@ -13007,11 +13137,11 @@ var MapScrollWheelZoomHandler = function (_Handler) {
   };
 
   _proto._seamless = function _seamless(evt, origin) {
-    var value = evt.deltaMode === window.WheelEvent.DOM_DELTA_LINE ? evt.deltaY * 40 : evt.deltaY;
+    var value = evt.deltaMode === window.WheelEvent.DOM_DELTA_LINE ? evt.deltaY * 60 : evt.deltaY;
 
     if (value % wheelZoomDelta !== 0) {
       if (!this._ensureTrackpad) {
-        if (Math.abs(value) < 40) {
+        if (Math.abs(value) < 60) {
           this._trackPadSuspect++;
         } else {
           this._trackPadSuspect = 0;
@@ -13023,7 +13153,7 @@ var MapScrollWheelZoomHandler = function (_Handler) {
       }
 
       if (this._ensureTrackpad) {
-        value *= 20;
+        value *= 14;
       }
     }
 
@@ -13081,7 +13211,7 @@ var MapScrollWheelZoomHandler = function (_Handler) {
       _this2._zooming = false;
       delete _this2._timeout;
       map.onZoomEnd(map.getZoom(), _this2._zoomOrigin);
-    }, 200);
+    }, 320);
   };
 
   _proto._interval = function _interval(evt, origin) {
@@ -20204,6 +20334,7 @@ function lookAt(te, eye, target, up) {
 
 var RADIAN = Math.PI / 180;
 var DEFAULT_FOV = 0.6435011087932844;
+var TEMP_COORD = new Coordinate(0, 0);
 Map$1.include({
   getFov: function getFov() {
     if (!this._fov) {
@@ -20331,15 +20462,15 @@ Map$1.include({
   },
   _pointToContainerPoint: function () {
     var a = [0, 0, 0];
-    return function (point, zoom, altitude) {
+    return function (point, zoom, altitude, out) {
       if (altitude === void 0) {
         altitude = 0;
       }
 
-      point = this._pointToPoint(point, zoom);
+      point = this._pointToPoint(point, zoom, out);
 
       if (this.isTransforming() || altitude) {
-        altitude *= this.getResolution(zoom) / this.getResolution();
+        altitude *= this._getResolution(zoom) / this._getResolution();
         var _scale = this._glScale;
         set$2(a, point.x * _scale, point.y * _scale, altitude * _scale);
 
@@ -20350,11 +20481,25 @@ Map$1.include({
             h2 = this.height / 2;
         t[0] = t[0] * w2 + w2;
         t[1] = -(t[1] * h2) + h2;
+
+        if (out) {
+          out.x = t[0];
+          out.y = t[1];
+          return out;
+        }
+
         return new Point(t[0], t[1]);
       } else {
-        var centerPoint = this._prjToPoint(this._getPrjCenter());
+        var centerPoint = this._prjToPoint(this._getPrjCenter(), null, TEMP_COORD);
 
-        return point._sub(centerPoint)._add(this.width / 2, this.height / 2);
+        if (out) {
+          out.x = point.x;
+          out.y = point.y;
+        } else {
+          out = point;
+        }
+
+        return out._sub(centerPoint)._add(this.width / 2, this.height / 2);
       }
     };
   }(),
@@ -20378,7 +20523,7 @@ Map$1.include({
     var cp = [0, 0, 0],
         coord0 = [0, 0, 0, 1],
         coord1 = [0, 0, 0, 1];
-    return function (p, zoom) {
+    return function (p, zoom, out) {
       if (this.isTransforming()) {
         var w2 = this.width / 2 || 1,
             h2 = this.height / 2 || 1;
@@ -20396,12 +20541,23 @@ Map$1.include({
         var z1 = coord1[2];
         var t = z0 === z1 ? 0 : (0 - z0) / (z1 - z0);
 
-        var point = new Point(interpolate(x0, x1, t), interpolate(y0, y1, t))._multi(1 / this._glScale);
+        var _x = interpolate(x0, x1, t);
 
-        return zoom === undefined || this.getZoom() === zoom ? point : this._pointToPointAtZoom(point, zoom);
+        var _y = interpolate(y0, y1, t);
+
+        if (out) {
+          out.x = _x;
+          out.y = _y;
+        } else {
+          out = new Point(_x, _y);
+        }
+
+        out._multi(1 / this._glScale);
+
+        return zoom === undefined || this.getZoom() === zoom ? out : this._pointToPointAtZoom(out, zoom, out);
       }
 
-      var centerPoint = this._prjToPoint(this._getPrjCenter(), zoom),
+      var centerPoint = this._prjToPoint(this._getPrjCenter(), zoom, out),
           scale$$1 = zoom !== undefined ? this._getResolution() / this._getResolution(zoom) : 1;
 
       var x = scale$$1 * (p.x - this.width / 2),
@@ -24296,7 +24452,7 @@ var TileConfig = function () {
     return this.getNeighorTileIndex(tileIndex['x'], tileIndex['y'], 0, 0, res);
   };
 
-  _proto.getNeighorTileIndex = function getNeighorTileIndex(tileX, tileY, offsetX, offsetY, res, isRepeatWorld) {
+  _proto.getNeighorTileIndex = function getNeighorTileIndex(tileX, tileY, offsetX, offsetY, res, repeatWorld) {
     var tileSystem = this.tileSystem;
     var x = tileX + tileSystem['scale']['x'] * offsetX;
     var y = tileY - tileSystem['scale']['y'] * offsetY;
@@ -24306,31 +24462,37 @@ var TileConfig = function () {
 
     var ext = this._getTileFullIndex(res);
 
-    if (isRepeatWorld) {
-      if (ext['xmax'] === ext['xmin']) {
-        x = ext['xmin'];
-      } else if (x < ext['xmin']) {
-        x = ext['xmax'] - (ext['xmin'] - x) % (ext['xmax'] - ext['xmin']);
-
-        if (x === ext['xmax']) {
+    if (repeatWorld) {
+      if (repeatWorld === true || repeatWorld === 'x') {
+        if (ext['xmax'] === ext['xmin']) {
           x = ext['xmin'];
+        } else if (x < ext['xmin']) {
+          x = ext['xmax'] - (ext['xmin'] - x) % (ext['xmax'] - ext['xmin']);
+
+          if (x === ext['xmax']) {
+            x = ext['xmin'];
+          }
+        } else if (x >= ext['xmax']) {
+          x = ext['xmin'] + (x - ext['xmin']) % (ext['xmax'] - ext['xmin']);
         }
-      } else if (x >= ext['xmax']) {
-        x = ext['xmin'] + (x - ext['xmin']) % (ext['xmax'] - ext['xmin']);
       }
 
-      if (ext['ymax'] === ext['ymin']) {
-        y = ext['ymin'];
-      } else if (y >= ext['ymax']) {
-        y = ext['ymin'] + (y - ext['ymin']) % (ext['ymax'] - ext['ymin']);
-      } else if (y < ext['ymin']) {
-        y = ext['ymax'] - (ext['ymin'] - y) % (ext['ymax'] - ext['ymin']);
-
-        if (y === ext['ymax']) {
+      if (repeatWorld === true || repeatWorld === 'y') {
+        if (ext['ymax'] === ext['ymin']) {
           y = ext['ymin'];
+        } else if (y >= ext['ymax']) {
+          y = ext['ymin'] + (y - ext['ymin']) % (ext['ymax'] - ext['ymin']);
+        } else if (y < ext['ymin']) {
+          y = ext['ymax'] - (ext['ymin'] - y) % (ext['ymax'] - ext['ymin']);
+
+          if (y === ext['ymax']) {
+            y = ext['ymin'];
+          }
         }
       }
-    } else if (x < ext['xmin'] || x > ext['xmax'] || y > ext['ymax'] || y < ext['ymin']) {
+    }
+
+    if (x < ext['xmin'] || x > ext['xmax'] || y > ext['ymax'] || y < ext['ymin']) {
       out = true;
     }
 
@@ -24418,7 +24580,11 @@ var options$u = {
   'zoomOffset': 0
 };
 var URL_PATTERN = /\{ *([\w_]+) *\}/g;
-var MAX_VISIBLE_SIZE = 5;
+var TEMP_POINT = new Point(0, 0);
+var TEMP_POINT0$1 = new Point(0, 0);
+var TEMP_POINT1 = new Point(0, 0);
+var TEMP_POINT2 = new Point(0, 0);
+var TEMP_POINT_EXTENT = new PointExtent();
 
 var TileLayer = function (_Layer) {
   _inheritsLoose(TileLayer, _Layer);
@@ -24447,8 +24613,9 @@ var TileLayer = function (_Layer) {
     return new Size(size);
   };
 
-  _proto.getTiles = function getTiles(z) {
+  _proto.getTiles = function getTiles(z, parentLayer) {
     var map = this.getMap();
+    var parentRenderer = parentLayer && parentLayer.getRenderer();
     var mapExtent = map.getContainerExtent();
     var tileGrids = [];
     var count = 0;
@@ -24457,7 +24624,7 @@ var TileLayer = function (_Layer) {
     var tileZoom = isNil(z) ? this._getTileZoom(map.getZoom()) : z;
 
     if (!isNil(z) || !this.options['cascadeTiles'] || map.getPitch() <= minPitchToCascade || !isNil(minZoom) && tileZoom <= minZoom) {
-      var _currentTiles = this._getTiles(tileZoom, mapExtent);
+      var _currentTiles = this._getTiles(tileZoom, mapExtent, undefined, parentRenderer);
 
       if (_currentTiles) {
         count += _currentTiles.tiles.length;
@@ -24473,13 +24640,13 @@ var TileLayer = function (_Layer) {
     var visualHeight = Math.floor(map._getVisualHeight(minPitchToCascade));
     var extent0 = new PointExtent(0, map.height - visualHeight, map.width, map.height);
 
-    var currentTiles = this._getTiles(tileZoom, extent0, 0);
+    var currentTiles = this._getTiles(tileZoom, extent0, 0, parentRenderer);
 
     count += currentTiles ? currentTiles.tiles.length : 0;
     var extent1 = new PointExtent(0, mapExtent.ymin, map.width, extent0.ymin);
     var d = map.getSpatialReference().getZoomDirection();
 
-    var parentTiles = this._getTiles(tileZoom - d, extent1, 1);
+    var parentTiles = this._getTiles(tileZoom - d, extent1, 1, parentRenderer);
 
     count += parentTiles ? parentTiles.tiles.length : 0;
     tileGrids.push(currentTiles, parentTiles);
@@ -24574,7 +24741,7 @@ var TileLayer = function (_Layer) {
     return zoom;
   };
 
-  _proto._getTiles = function _getTiles(z, containerExtent, maskID) {
+  _proto._getTiles = function _getTiles(z, containerExtent, maskID, parentRenderer) {
     var map = this.getMap();
     var zoom = z + this.options['zoomOffset'];
 
@@ -24612,13 +24779,15 @@ var TileLayer = function (_Layer) {
     var sr = this.getSpatialReference(),
         mapSR = map.getSpatialReference(),
         res = sr.getResolution(zoom);
-
     var extent2d = containerExtent.convertTo(function (c) {
-      return map._containerPointToPoint(c);
-    }),
-        innerExtent2D = this._getInnerExtent(z, containerExtent, extent2d)._add(offset);
+      return map._containerPointToPoint(c, undefined, TEMP_POINT);
+    });
+
+    var innerExtent2D = this._getInnerExtent(z, containerExtent, extent2d)._add(offset);
 
     extent2d._add(offset);
+
+    var offsetExtent2D = extent2d.sub(offset);
 
     var maskExtent = this._getMask2DExtent();
 
@@ -24630,11 +24799,11 @@ var TileLayer = function (_Layer) {
       }
 
       containerExtent = intersection.convertTo(function (c) {
-        return map._pointToContainerPoint(c);
+        return map._pointToContainerPoint(c, undefined, 0, TEMP_POINT);
       });
     }
 
-    var prjCenter = map._containerPointToPrj(containerExtent.getCenter());
+    var prjCenter = map._containerPointToPrj(containerExtent.getCenter(), TEMP_POINT2);
 
     var c;
 
@@ -24644,8 +24813,14 @@ var TileLayer = function (_Layer) {
       c = this._project(prjCenter);
     }
 
-    var pmin = this._project(map._pointToPrj(extent2d.getMin())),
-        pmax = this._project(map._pointToPrj(extent2d.getMax()));
+    TEMP_POINT0$1.x = extent2d.xmin;
+    TEMP_POINT0$1.y = extent2d.ymin;
+    TEMP_POINT1.x = extent2d.xmax;
+    TEMP_POINT1.y = extent2d.ymax;
+
+    var pmin = this._project(map._pointToPrj(TEMP_POINT0$1, undefined, TEMP_POINT0$1));
+
+    var pmax = this._project(map._pointToPrj(TEMP_POINT1, undefined, TEMP_POINT1));
 
     var centerTile = tileConfig.getTileIndex(c, res),
         ltTile = tileConfig.getTileIndex(pmin, res),
@@ -24656,7 +24831,7 @@ var TileLayer = function (_Layer) {
         right = Math.ceil(Math.abs(centerTile.x - rbTile.x));
 
     var layerId = this.getId(),
-        renderer = this.getRenderer(),
+        renderer = this.getRenderer() || parentRenderer,
         tileSize = this.getTileSize(),
         scale = this._getTileConfig().tileSystem.scale;
 
@@ -24664,6 +24839,8 @@ var TileLayer = function (_Layer) {
         extent = new PointExtent();
 
     for (var i = -left; i <= right; i++) {
+      var metVisibleTile = false;
+
       for (var j = -top; j <= bottom; j++) {
         var idx = tileConfig.getNeighorTileIndex(centerTile['x'], centerTile['y'], i, j, res, this.options['repeatWorld']);
 
@@ -24671,8 +24848,25 @@ var TileLayer = function (_Layer) {
           continue;
         }
 
-        var pnw = tileConfig.getTilePrjNW(idx.x, idx.y, res),
-            p = map._prjToPoint(this._unproject(pnw), z);
+        var hasCachedInfo = false;
+
+        var tileId = this._getTileId(idx, zoom);
+
+        var tileInfo = renderer && renderer.isTileCachedOrLoading(tileId);
+
+        if (tileInfo) {
+          tileInfo = tileInfo.info;
+          hasCachedInfo = true;
+        }
+
+        var p = void 0;
+
+        if (tileInfo) {
+          p = tileInfo.point0;
+        } else {
+          var pnw = tileConfig.getTilePrjNW(idx.x, idx.y, res);
+          p = map._prjToPoint(this._unproject(pnw), z);
+        }
 
         var width = void 0,
             height = void 0;
@@ -24704,40 +24898,50 @@ var TileLayer = function (_Layer) {
           p._sub(offset);
         }
 
-        var tileExtent = new PointExtent(p, p.add(width, height)),
-            tileInfo = {
-          'point': p,
-          'z': z,
-          'x': idx.x,
-          'y': idx.y,
-          'extent2d': tileExtent,
-          'mask': maskID
-        };
+        if (!tileInfo) {
+          var _tileExtent = new PointExtent(p.x, p.y, p.x + width, p.y + height);
 
-        if (innerExtent2D.intersects(tileExtent) || !innerExtent2D.equals(extent2d.sub(offset)) && this._isTileInExtent(tileInfo, containerExtent)) {
+          tileInfo = {
+            'point0': p.add(offset)._sub(dx, dy),
+            'point': p,
+            'z': z,
+            'x': idx.x,
+            'y': idx.y,
+            'extent2d': _tileExtent,
+            'mask': maskID
+          };
+        }
+
+        var tileExtent = tileInfo.extent2d;
+
+        if (innerExtent2D.intersects(tileExtent) || !innerExtent2D.equals(offsetExtent2D) && this._isTileInExtent(tileInfo, containerExtent)) {
           if (hasOffset) {
-            tileInfo.point._add(offset);
-
-            tileInfo.extent2d._add(offset);
+            tileInfo.point = p._add(offset);
+            tileInfo.extent2d.set(p.x, p.y, p.x + width, p.y + height);
+            tileInfo.extent2d = tileExtent._add(offset);
           }
 
-          tileInfo['size'] = [width, height];
-          tileInfo['dupKey'] = z + ',' + p.round().toArray().join() + ',' + width + ',' + height + ',' + layerId;
-          tileInfo['id'] = this._getTileId(idx, zoom);
-          tileInfo['layer'] = layerId;
-
-          if (!renderer || !renderer.isTileCachedOrLoading(tileInfo.id)) {
+          if (!hasCachedInfo) {
+            tileInfo['size'] = [width, height];
+            var point0 = tileInfo.point0;
+            tileInfo['dupKey'] = z + ',' + Math.round(point0.x) + ',' + Math.round(point0.y) + ',' + width + ',' + height + ',' + layerId;
+            tileInfo['id'] = this._getTileId(idx, zoom);
+            tileInfo['layer'] = layerId;
             tileInfo['url'] = this.getTileUrl(idx.x, idx.y, zoom);
           }
 
           tiles.push(tileInfo);
 
           extent._combine(tileExtent);
+
+          metVisibleTile = true;
+        } else if (metVisibleTile) {
+          break;
         }
       }
     }
 
-    var center = map._containerPointToPoint(containerExtent.getCenter(), z)._add(offset);
+    var center = map._containerPointToPoint(containerExtent.getCenter(), z, TEMP_POINT)._add(offset);
 
     tiles.sort(function (a, b) {
       return a.point.distanceTo(center) - b.point.distanceTo(center);
@@ -24761,7 +24965,7 @@ var TileLayer = function (_Layer) {
         h = Math.abs(Math.cos(bearing) * ch) || ch,
         w = Math.abs(Math.sin(bearing) * ch) || cw;
 
-    return new PointExtent(center.sub(w, h), center.add(w, h));
+    return new PointExtent(center.x - w, center.y - h, center.x + w, center.y + h);
   };
 
   _proto._getTileOffset = function _getTileOffset(z) {
@@ -24781,26 +24985,26 @@ var TileLayer = function (_Layer) {
   };
 
   _proto._getTileId = function _getTileId(idx, zoom, id) {
-    return [id || this.getId(), idx.idy, idx.idx, zoom].join('__');
+    return (id || this.getId()) + "__" + idx.idy + "__" + idx.idx + "__" + zoom;
   };
 
-  _proto._project = function _project(pcoord) {
+  _proto._project = function _project(pcoord, out) {
     var map = this.getMap();
     var sr = this.getSpatialReference();
 
     if (sr !== map.getSpatialReference()) {
-      return sr.getProjection().project(map.getProjection().unproject(pcoord));
+      return sr.getProjection().project(map.getProjection().unproject(pcoord, out), out);
     } else {
       return pcoord;
     }
   };
 
-  _proto._unproject = function _unproject(pcoord) {
+  _proto._unproject = function _unproject(pcoord, out) {
     var map = this.getMap();
     var sr = this.getSpatialReference();
 
     if (sr !== map.getSpatialReference()) {
-      return map.getProjection().project(sr.getProjection().unproject(pcoord));
+      return map.getProjection().project(sr.getProjection().unproject(pcoord, out), out);
     } else {
       return pcoord;
     }
@@ -24854,15 +25058,13 @@ var TileLayer = function (_Layer) {
       return false;
     }
 
-    var tileZoom = tileInfo.z;
-    var tileExtent = tileInfo.extent2d.convertTo(function (c) {
-      return map._pointToContainerPoint(c, tileZoom);
-    });
-
-    if (tileExtent.getWidth() < MAX_VISIBLE_SIZE || tileExtent.getHeight() < MAX_VISIBLE_SIZE) {
-      return false;
+    if (!this._convertPointCallback) {
+      this._convertPointCallback = convertPoint.bind(this);
     }
 
+    var tileZoom = tileInfo.z;
+    this._coordTileZoom = tileZoom;
+    var tileExtent = tileInfo.extent2d.convertTo(this._convertPointCallback, TEMP_POINT_EXTENT);
     return extent.intersects(tileExtent);
   };
 
@@ -24883,6 +25085,10 @@ var TileLayer = function (_Layer) {
 
 TileLayer.registerJSONType('TileLayer');
 TileLayer.mergeOptions(options$u);
+
+function convertPoint(c) {
+  return this.getMap()._pointToContainerPoint(c, this._coordTileZoom, 0, TEMP_POINT);
+}
 
 var GroupTileLayer = function (_TileLayer) {
   _inheritsLoose(GroupTileLayer, _TileLayer);
@@ -24941,7 +25147,7 @@ var GroupTileLayer = function (_TileLayer) {
         continue;
       }
 
-      var childGrid = layer.getTiles(z);
+      var childGrid = layer.getTiles(z, this);
 
       if (!childGrid || childGrid.count === 0) {
         continue;
@@ -28497,7 +28703,7 @@ var TileLayerCanvasRenderer = function (_CanvasRenderer) {
   };
 
   _proto.isTileCachedOrLoading = function isTileCachedOrLoading(tileId) {
-    return this.tilesLoading[tileId] || this.tilesInView[tileId] || this.tileCache.has(tileId);
+    return this.tilesLoading[tileId] || this.tilesInView[tileId] || this.tileCache.get(tileId);
   };
 
   _proto._drawTiles = function _drawTiles(tiles, parentTiles, childTiles, placeholders) {

@@ -59,8 +59,13 @@ export default extend({}, Common, /** @lends projection.EPSG3857 */ {
             c = y / metersPerDegree;
             c = (2 * Math.atan(Math.exp(c * rad)) - Math.PI / 2) / rad;
         }
-        const rx = wrap(x / metersPerDegree, -180, 180);
-        const ry = wrap(c, -this.maxLatitude, this.maxLatitude);
+
+        // FIXME: sakitam-fdd - config wrap coordinates
+        // return new Coordinate(x / metersPerDegree, c);
+
+        // const rx = wrap(x / metersPerDegree, -180, 180);
+        const rx = x / metersPerDegree;
+        const ry = c;
         if (out) {
             out.x = rx;
             out.y = ry;
@@ -68,7 +73,5 @@ export default extend({}, Common, /** @lends projection.EPSG3857 */ {
         }
         return new Coordinate(rx, ry);
         // return new Coordinate(wrap(x / metersPerDegree, -180, 180), wrap(c, -this.maxLatitude, this.maxLatitude));
-        // FIXME: sakitam-fdd - config wrap coordinates
-        // return new Coordinate(x / metersPerDegree, c);
     }
 }, WGS84Sphere);
