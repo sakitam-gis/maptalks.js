@@ -84,7 +84,7 @@ export default class ImageMarkerSymbolizer extends PointSymbolizer {
         }
 
         if ('replaceColor' in this.style) {
-            this.replaceColor_();
+            this.replaceColor_(ctx);
         }
     }
 
@@ -133,6 +133,7 @@ export default class ImageMarkerSymbolizer extends PointSymbolizer {
     translate() {
         const s = this.symbol;
         return {
+            'markerReplaceColor': s['markerReplaceColor'],
             'markerFile': s['markerFile'],
             'markerOpacity': getValueOrDefault(s['markerOpacity'], 1),
             'markerWidth': getValueOrDefault(s['markerWidth'], null),
@@ -148,17 +149,10 @@ export default class ImageMarkerSymbolizer extends PointSymbolizer {
     }
 
     replaceColor_(ctx) {
-        if (!this.style.replaceColor) {
+        if (!this.style.markerReplaceColor) {
             return;
         }
-        const color = this.style.replaceColor;
-        //
-        // this.canvas_.width = this.image_.width;
-        // this.canvas_.height = this.image_.height;
-        //
-        // const ctx = this.canvas_.getContext('2d');
-        // ctx.drawImage(this.image_, 0, 0);
-
+        const color = this.style.markerReplaceColor;
         const imgData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
         const data = imgData.data;
         const r = color[0] / 255.0;

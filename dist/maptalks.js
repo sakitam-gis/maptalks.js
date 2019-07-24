@@ -10209,7 +10209,7 @@
       }
 
       if ('replaceColor' in this.style) {
-        this.replaceColor_();
+        this.replaceColor_(ctx);
       }
     };
 
@@ -10263,6 +10263,7 @@
     _proto.translate = function translate() {
       var s = this.symbol;
       return {
+        'markerReplaceColor': s['markerReplaceColor'],
         'markerFile': s['markerFile'],
         'markerOpacity': getValueOrDefault(s['markerOpacity'], 1),
         'markerWidth': getValueOrDefault(s['markerWidth'], null),
@@ -10276,11 +10277,11 @@
     };
 
     _proto.replaceColor_ = function replaceColor_(ctx) {
-      if (!this.style.replaceColor) {
+      if (!this.style.markerReplaceColor) {
         return;
       }
 
-      var color = this.style.replaceColor;
+      var color = this.style.markerReplaceColor;
       var imgData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
       var data = imgData.data;
       var r = color[0] / 255.0;
