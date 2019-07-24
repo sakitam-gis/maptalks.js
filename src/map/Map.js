@@ -618,6 +618,7 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
         if (isNaN(zoom) || isNil(zoom)) {
             return this;
         }
+        zoom = +zoom;
         if (this._loaded && this.options['zoomAnimation'] && options['animation']) {
             this._zoomAnimation(zoom);
         } else {
@@ -649,6 +650,7 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
         }
         if (maxZoom !== null && maxZoom < this._zoomLevel) {
             this.setZoom(maxZoom);
+            maxZoom = +maxZoom;
         }
         this.options['maxZoom'] = maxZoom;
         return this;
@@ -672,6 +674,7 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
      */
     setMinZoom(minZoom) {
         if (minZoom !== null) {
+            minZoom = +minZoom;
             const viewMinZoom = this._spatialReference.getMinZoom();
             if (minZoom < viewMinZoom) {
                 minZoom = viewMinZoom;
@@ -2116,9 +2119,9 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
      * @return {Point} 2D point
      * @private
      */
-    _prjToPoint(pCoord, zoom) {
+    _prjToPoint(pCoord, zoom, out) {
         zoom = (isNil(zoom) ? this.getZoom() : zoom);
-        return this._spatialReference.getTransformation().transform(pCoord, this._getResolution(zoom));
+        return this._spatialReference.getTransformation().transform(pCoord, this._getResolution(zoom), out);
     }
 
     /**
@@ -2128,9 +2131,9 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
      * @return {Coordinate} projected coordinate
      * @private
      */
-    _pointToPrj(point, zoom) {
+    _pointToPrj(point, zoom, out) {
         zoom = (isNil(zoom) ? this.getZoom() : zoom);
-        return this._spatialReference.getTransformation().untransform(point, this._getResolution(zoom));
+        return this._spatialReference.getTransformation().untransform(point, this._getResolution(zoom), out);
     }
 
     /**
@@ -2140,11 +2143,17 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
      * @return {Point} point at current zoom
      * @private
      */
-    _pointToPoint(point, zoom) {
-        if (!isNil(zoom)) {
-            return point.multi(this._getResolution(zoom) / this._getResolution());
+    _pointToPoint(point, zoom, out) {
+        if (out) {
+            out.x = point.x;
+            out.y = point.y;
+        } else {
+            out = point.copy();
         }
-        return point.copy();
+        if (!isNil(zoom)) {
+            return out._multi(this._getResolution(zoom) / this._getResolution());
+        }
+        return out;
     }
 
     /**
@@ -2154,11 +2163,17 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
      * @return {Point} point at current zoom
      * @private
      */
-    _pointToPointAtZoom(point, zoom) {
-        if (!isNil(zoom)) {
-            return point.multi(this._getResolution() / this._getResolution(zoom));
+    _pointToPointAtZoom(point, zoom, out) {
+        if (out) {
+            out.x = point.x;
+            out.y = point.y;
+        } else {
+            out = point.copy();
         }
-        return point.copy();
+        if (!isNil(zoom)) {
+            return out._multi(this._getResolution() / this._getResolution(zoom));
+        }
+        return out;
     }
 
     /**
@@ -2168,8 +2183,8 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
      * @return {Coordinate}
      * @private
      */
-    _containerPointToPrj(containerPoint) {
-        return this._pointToPrj(this._containerPointToPoint(containerPoint));
+    _containerPointToPrj(containerPoint, out) {
+        return this._pointToPrj(this._containerPointToPoint(containerPoint, undefined, out), undefined, out);
     }
 
     /**
