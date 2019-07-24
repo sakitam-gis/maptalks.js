@@ -10202,7 +10202,7 @@ var ImageMarkerSymbolizer = function (_PointSymbolizer) {
       ctx.globalAlpha = alpha;
     }
 
-    if ('replaceColor' in this.style) {
+    if ('markerReplaceColor' in this.style) {
       this.replaceColor_(ctx);
     }
   };

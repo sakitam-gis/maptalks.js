@@ -34,7 +34,8 @@ module.exports = {
     ],
     output: [
         {
-            'sourcemap': testing ? 'inline' : false,
+            // 'sourcemap': testing ? 'inline' : false,
+            'sourcemap': true,
             'format': 'umd',
             'name': 'maptalks',
             banner,

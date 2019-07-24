@@ -10208,7 +10208,7 @@
         ctx.globalAlpha = alpha;
       }
 
-      if ('replaceColor' in this.style) {
+      if ('markerReplaceColor' in this.style) {
         this.replaceColor_(ctx);
       }
     };
@@ -31322,3 +31322,4 @@
   typeof console !== 'undefined' && console.log && console.log('maptalks v0.44.2');
 
 })));
+//# sourceMappingURL=maptalks.js.map

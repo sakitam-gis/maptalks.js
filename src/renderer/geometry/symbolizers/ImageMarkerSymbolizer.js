@@ -83,7 +83,7 @@ export default class ImageMarkerSymbolizer extends PointSymbolizer {
             ctx.globalAlpha = alpha;
         }
 
-        if ('replaceColor' in this.style) {
+        if ('markerReplaceColor' in this.style) {
             this.replaceColor_(ctx);
         }
     }
