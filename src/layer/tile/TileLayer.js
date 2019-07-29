@@ -88,6 +88,7 @@ const TEMP_POINT = new Point(0, 0);
 const TEMP_POINT0 = new Point(0, 0);
 const TEMP_POINT1 = new Point(0, 0);
 const TEMP_POINT2 = new Point(0, 0);
+const TEMP_POINT3 = new Point(0, 0);
 const TEMP_POINT_EXTENT = new PointExtent();
 
 /**
@@ -329,39 +330,48 @@ class TileLayer extends Layer {
         }
 
         //Get description of center tile including left and top offset
-        const prjCenter = map._containerPointToPrj(containerExtent.getCenter(), TEMP_POINT2);
+        const prjCenter = map._containerPointToPrj(containerExtent.getCenter(), TEMP_POINT0);
         let c;
         if (hasOffset) {
-            c = this._project(map._pointToPrj(map._prjToPoint(prjCenter)._add(offset)));
+            c = this._project(map._pointToPrj(map._prjToPoint(prjCenter, undefined, TEMP_POINT1)._add(offset), undefined, TEMP_POINT1), TEMP_POINT1);
         } else {
-            c = this._project(prjCenter);
+            c = this._project(prjCenter, TEMP_POINT1);
         }
 
-        TEMP_POINT0.x = extent2d.xmin;
-        TEMP_POINT0.y = extent2d.ymin;
-        TEMP_POINT1.x = extent2d.xmax;
-        TEMP_POINT1.y = extent2d.ymax;
-        const pmin = this._project(map._pointToPrj(TEMP_POINT0, undefined, TEMP_POINT0));
-        const pmax = this._project(map._pointToPrj(TEMP_POINT1, undefined, TEMP_POINT1));
+        TEMP_POINT2.x = extent2d.xmin;
+        TEMP_POINT2.y = extent2d.ymin;
+        TEMP_POINT3.x = extent2d.xmax;
+        TEMP_POINT3.y = extent2d.ymax;
+        const pmin = this._project(map._pointToPrj(TEMP_POINT2, undefined, TEMP_POINT2), TEMP_POINT2);
+        const pmax = this._project(map._pointToPrj(TEMP_POINT3, undefined, TEMP_POINT3), TEMP_POINT3);
 
-        const centerTile = tileConfig.getTileIndex(c, res),
-            ltTile = tileConfig.getTileIndex(pmin, res),
-            rbTile = tileConfig.getTileIndex(pmax, res);
+        const centerTile = tileConfig.getTileIndex(c, res);
+        const ltTile = tileConfig.getTileIndex(pmin, res);
+        const rbTile = tileConfig.getTileIndex(pmax, res);
 
-        //Number of tiles around the center tile
+        // Number of tiles around the center tile
         const top = Math.ceil(Math.abs(centerTile.y - ltTile.y)),
             left = Math.ceil(Math.abs(centerTile.x - ltTile.x)),
             bottom = Math.ceil(Math.abs(centerTile.y - rbTile.y)),
             right = Math.ceil(Math.abs(centerTile.x - rbTile.x));
+        const tileSize = this.getTileSize();
         const layerId = this.getId(),
             renderer = this.getRenderer() || parentRenderer,
-            tileSize = this.getTileSize(),
             scale = this._getTileConfig().tileSystem.scale;
         const tiles = [], extent = new PointExtent();
-        for (let i = -(left); i <= right; i++) {
-            let metVisibleTile = false;
-            for (let j = -(top); j <= bottom; j++) {
-                const idx = tileConfig.getNeighorTileIndex(centerTile['x'], centerTile['y'], i, j, res, this.options['repeatWorld']);
+        for (let i = -top; i <= bottom; i++) {
+            let j = -left;
+            let leftVisitEnd = -Infinity;
+            let rightVisitEnd = false;
+            while (j >= leftVisitEnd && j <= right) {
+                const idx = tileConfig.getNeighorTileIndex(centerTile['x'], centerTile['y'], j, i, res, sr === mapSR && this.options['repeatWorld']);
+                if (leftVisitEnd === -Infinity) {
+                    //从左往右遍历中
+                    j++;
+                } else {
+                    //从右往左遍历中
+                    j--;
+                }
                 if (idx.out) {
                     continue;
                 }
@@ -377,7 +387,7 @@ class TileLayer extends Layer {
                     p = tileInfo.point0;
                 } else {
                     const pnw = tileConfig.getTilePrjNW(idx.x, idx.y, res);
-                    p = map._prjToPoint(this._unproject(pnw), z);
+                    p = map._prjToPoint(this._unproject(pnw, TEMP_POINT3), z);
                 }
                 let width, height;
                 if (sr === mapSR) {
@@ -385,7 +395,7 @@ class TileLayer extends Layer {
                     height = tileSize.height;
                 } else {
                     const pse = tileConfig.getTilePrjSE(idx.x, idx.y, res),
-                        pp = map._prjToPoint(this._unproject(pse), z);
+                        pp = map._prjToPoint(this._unproject(pse, TEMP_POINT3), z, TEMP_POINT3);
                     width = Math.abs(Math.round(pp.x - p.x));
                     height = Math.abs(Math.round(pp.y - p.y));
                 }
@@ -417,7 +427,8 @@ class TileLayer extends Layer {
                 }
 
                 const tileExtent = tileInfo.extent2d;
-                if (innerExtent2D.intersects(tileExtent) || !innerExtent2D.equals(offsetExtent2D) && this._isTileInExtent(tileInfo, containerExtent)) {
+                if (rightVisitEnd || innerExtent2D.intersects(tileExtent) ||
+                    !innerExtent2D.equals(offsetExtent2D) && this._isTileInExtent(tileInfo, containerExtent)) {
                     if (hasOffset) {
                         tileInfo.point = p._add(offset);
                         tileInfo.extent2d.set(p.x, p.y, p.x + width, p.y + height);
@@ -433,11 +444,14 @@ class TileLayer extends Layer {
                     }
                     tiles.push(tileInfo);
                     extent._combine(tileExtent);
-                    metVisibleTile = true;
-                } else if (metVisibleTile) {
-                    //因为瓦片分布规律是 [看不见][看得见][看不见]
-                    //所以遇到看得见的瓦片后，遇到了第一个看不见的瓦片，后续瓦片都看不见了，无需继续遍历
-                    break;
+                    if (leftVisitEnd === -Infinity) {
+                        //从左往右第一次遇到可视的瓦片，改为从右往左遍历
+                        leftVisitEnd = j;
+                        j = right;
+                    } else if (!rightVisitEnd) {
+                        //从右往左第一次遇到可视瓦片，之后的瓦片全部可视
+                        rightVisitEnd = true;
+                    }
                 }
             }
         }
@@ -483,15 +497,18 @@ class TileLayer extends Layer {
 
     _getTileId(idx, zoom, id) {
         //id is to mark GroupTileLayer's child layers
-        return `${id || this.getId()}__${idx.idy}__${idx.idx}__${zoom}`;//].join('__');
+        return `${id || this.getId()}-${idx.idy}-${idx.idx}-${zoom}`;
     }
 
 
     _project(pcoord, out) {
         const map = this.getMap();
         const sr = this.getSpatialReference();
-        if (sr !== map.getSpatialReference()) {
-            return sr.getProjection().project(map.getProjection().unproject(pcoord, out), out);
+        const mapSR = map.getSpatialReference();
+        if (sr !== mapSR) {
+            const mapProjection = map.getProjection();
+            const projection = sr.getProjection();
+            return projection.project(mapProjection.unproject(pcoord, out), out);
         } else {
             return pcoord;
         }
@@ -500,8 +517,11 @@ class TileLayer extends Layer {
     _unproject(pcoord, out) {
         const map = this.getMap();
         const sr = this.getSpatialReference();
-        if (sr !== map.getSpatialReference()) {
-            return map.getProjection().project(sr.getProjection().unproject(pcoord, out), out);
+        const mapSR = map.getSpatialReference();
+        if (sr !== mapSR) {
+            const mapProjection = map.getProjection();
+            const projection = sr.getProjection();
+            return mapProjection.project(projection.unproject(pcoord, out), out);
         } else {
             return pcoord;
         }
@@ -552,10 +572,6 @@ class TileLayer extends Layer {
     }
 
     _isTileInExtent(tileInfo, extent) {
-        const map = this.getMap();
-        if (!map) {
-            return false;
-        }
         if (!this._convertPointCallback) {
             this._convertPointCallback = convertPoint.bind(this);
         }
@@ -578,6 +594,10 @@ class TileLayer extends Layer {
         delete this._tileConfig;
         delete this._defaultTileConfig;
         delete this._sr;
+        const renderer = this.getRenderer();
+        if (renderer) {
+            renderer.clear();
+        }
     }
 }
 
