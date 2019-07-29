@@ -2836,11 +2836,11 @@
         ctx.shadowBlur = ctx.shadowOffsetX = ctx.shadowOffsetY = 0;
       }
 
-      Canvas.fillText(ctx, text, pt);
+      Canvas.fillText(ctx, text, pt.x, pt.y);
 
       if (gco) {
         ctx.globalCompositeOperation = gco;
-        Canvas.fillText(ctx, text, pt, fill);
+        Canvas.fillText(ctx, text, pt.x, pt.y, fill);
 
         if (shadowBlur) {
           ctx.shadowBlur = shadowBlur;
@@ -2849,14 +2849,14 @@
         }
       }
     },
-    fillText: function fillText(ctx, text, point, rgba) {
+    fillText: function fillText(ctx, text, x, y, rgba) {
       ctx.canvas._drawn = true;
 
       if (rgba) {
         ctx.fillStyle = rgba;
       }
 
-      ctx.fillText(text, Math.round(point.x), Math.round(point.y));
+      ctx.fillText(text, Math.round(x), Math.round(y));
     },
     _stroke: function _stroke(ctx, strokeOpacity, x, y) {
       if (hitTesting) {
@@ -3306,12 +3306,12 @@
 
       Canvas._stroke(ctx, lineOpacity, pt.x - width, pt.y - height);
     },
-    rectangle: function rectangle(ctx, pt, size, lineOpacity, fillOpacity) {
+    rectangle: function rectangle(ctx, x, y, size, lineOpacity, fillOpacity) {
       ctx.beginPath();
-      ctx.rect(pt.x, pt.y, size['width'], size['height']);
-      Canvas.fillCanvas(ctx, fillOpacity, pt.x, pt.y);
+      ctx.rect(x, y, size['width'], size['height']);
+      Canvas.fillCanvas(ctx, fillOpacity, x, y);
 
-      Canvas._stroke(ctx, lineOpacity, pt.x, pt.y);
+      Canvas._stroke(ctx, lineOpacity, x, y);
     },
     sector: function sector(ctx, pt, size, angles, lineOpacity, fillOpacity) {
       var rad = Math.PI / 180;
@@ -3335,15 +3335,15 @@
     _isPattern: function _isPattern(style) {
       return !isString(style) && !('addColorStop' in style);
     },
-    drawCross: function drawCross(ctx, p, lineWidth, color) {
+    drawCross: function drawCross(ctx, x, y, lineWidth, color) {
       ctx.canvas._drawn = true;
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
       ctx.beginPath();
-      ctx.moveTo(p.x - 5, p.y);
-      ctx.lineTo(p.x + 5, p.y);
-      ctx.moveTo(p.x, p.y - 5);
-      ctx.lineTo(p.x, p.y + 5);
+      ctx.moveTo(x - 5, y);
+      ctx.lineTo(x + 5, y);
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x, y + 5);
       ctx.stroke();
     },
     copy: function copy(canvas, c) {
@@ -5503,6 +5503,7 @@
     BaiduSphere: BaiduSphere
   });
 
+  var delta = 1E-7;
   var EPSG3857 = extend({}, Common, {
     code: 'EPSG:3857',
     rad: Math.PI / 180,
@@ -5534,10 +5535,10 @@
       return new Coordinate(x, y);
     },
     unproject: function unproject(pLnglat, out) {
-      var x = pLnglat.x,
-          y = pLnglat.y;
-      var rad = this.rad,
-          metersPerDegree = this.metersPerDegree;
+      var rad = this.rad;
+      var metersPerDegree = this.metersPerDegree;
+      var x = pLnglat.x / metersPerDegree;
+      var y = pLnglat.y;
       var c;
 
       if (y === 0) {
@@ -5547,7 +5548,15 @@
         c = (2 * Math.atan(Math.exp(c * rad)) - Math.PI / 2) / rad;
       }
 
-      var rx = x / metersPerDegree;
+      if (Math.abs(Math.abs(x) - 180) < delta) {
+        x = sign(x) * 180;
+      }
+
+      if (Math.abs(Math.abs(c) - this.maxLatitude) < delta) {
+        c = sign(c) * this.maxLatitude;
+      }
+
+      var rx = x;
       var ry = c;
 
       if (out) {
@@ -5847,6 +5856,10 @@
     };
 
     _proto.onSkipDrawOnInteracting = function onSkipDrawOnInteracting() {};
+
+    _proto.isLoadingResource = function isLoadingResource() {
+      return this._loadingResource;
+    };
 
     _proto.isRenderComplete = function isRenderComplete() {
       return !!this._renderComplete;
@@ -7262,6 +7275,7 @@
     return SpatialReference;
   }();
 
+  var TEMP_POINT = new Point(0, 0);
   var options$1 = {
     'maxVisualPitch': 60,
     'maxPitch': 80,
@@ -7706,7 +7720,7 @@
         zoom = this.getZoom();
       }
 
-      return this.getScale(zoom) / this.getScale(this.getGLZoom());
+      return this._getResolution(zoom) / this._getResolution(this.getGLZoom());
     };
 
     _proto.zoomIn = function zoomIn() {
@@ -8470,13 +8484,30 @@
       }
     };
 
-    _proto._get2DExtent = function _get2DExtent(zoom) {
+    _proto._get2DExtent = function _get2DExtent(zoom, out) {
       var _this3 = this;
+
+      var cached;
+
+      if ((zoom === undefined || zoom === this._zoomLevel) && this._mapExtent2D) {
+        cached = this._mapExtent2D;
+      } else if (zoom === this.getGLZoom() && this._mapGlExtent2D) {
+        cached = this._mapGlExtent2D;
+      }
+
+      if (cached) {
+        if (out) {
+          out.set(cached['xmin'], cached['ymin'], cached['xmax'], cached['ymax']);
+          return out;
+        }
+
+        return cached.copy();
+      }
 
       var cExtent = this.getContainerExtent();
       return cExtent.convertTo(function (c) {
-        return _this3._containerPointToPoint(c, zoom);
-      });
+        return _this3._containerPointToPoint(c, zoom, TEMP_POINT);
+      }, out);
     };
 
     _proto._pointToExtent = function _pointToExtent(extent2D) {
@@ -8811,8 +8842,14 @@
     };
 
     _proto._getResolution = function _getResolution(zoom) {
+      if ((zoom === undefined || zoom === this._zoomLevel) && this._mapRes !== undefined) {
+        return this._mapRes;
+      } else if (zoom === this.getGLZoom() && this._mapGlRes !== undefined) {
+        return this._mapGlRes;
+      }
+
       if (isNil(zoom)) {
-        zoom = this.getZoom();
+        zoom = this._zoomLevel;
       }
 
       return this._spatialReference.getResolution(zoom);
@@ -10091,7 +10128,7 @@
         var p = points[i];
 
         if (!isNil(id)) {
-          Canvas.fillText(ctx, id, p.add(8, -4), color);
+          Canvas.fillText(ctx, id, p.x + 8, p.y - 4, color);
         }
 
         var c = [];
@@ -10300,6 +10337,9 @@
     return ImageMarkerSymbolizer;
   }(PointSymbolizer);
 
+  var TEMP_COORD0$1 = new Coordinate(0, 0);
+  var TEMP_COORD1$1 = new Coordinate(0, 0);
+
   var StrokeAndFillSymbolizer = function (_CanvasSymbolizer) {
     _inheritsLoose(StrokeAndFillSymbolizer, _CanvasSymbolizer);
 
@@ -10428,16 +10468,13 @@
       this._extMax.x = extent['xmax'];
       this._extMax.y = extent['ymax'];
 
-      var min = map._prjToPoint(this._extMin),
-          max = map._prjToPoint(this._extMax);
+      var min = map._prjToPoint(this._extMin, undefined, TEMP_COORD0$1),
+          max = map._prjToPoint(this._extMax, undefined, TEMP_COORD1$1);
 
       if (!this._pxExtent) {
         this._pxExtent = new PointExtent(min, max);
       } else {
-        this._pxExtent['xmin'] = Math.min(min.x, max.x);
-        this._pxExtent['xmax'] = Math.max(min.x, max.x);
-        this._pxExtent['ymin'] = Math.min(min.y, max.y);
-        this._pxExtent['ymax'] = Math.max(min.y, max.y);
+        this._pxExtent.set(Math.min(min.x, max.x), Math.min(min.y, max.y), Math.max(min.x, max.x), Math.max(min.y, max.y));
       }
 
       return this._pxExtent;
@@ -10981,6 +11018,12 @@
 
   var registerSymbolizers = [DrawAltitudeSymbolizer, StrokeAndFillSymbolizer, ImageMarkerSymbolizer, VectorPathMarkerSymbolizer, VectorMarkerSymbolizer, TextMarkerSymbolizer];
   var testCanvas;
+  var TEMP_POINT0$1 = new Point(0, 0);
+  var TEMP_PAINT_EXTENT = new PointExtent();
+  var TEMP_EXTENT$1 = new PointExtent();
+  var TEMP_FIXED_EXTENT = new PointExtent();
+  var TEMP_CLIP_EXTENT0 = new PointExtent();
+  var TEMP_CLIP_EXTENT1 = new PointExtent();
 
   var Painter = function (_Class) {
     _inheritsLoose(Painter, _Class);
@@ -11130,9 +11173,7 @@
     };
 
     _proto._pointContainerPoints = function _pointContainerPoints(points, dx, dy, ignoreAltitude, disableClip, pointPlacement) {
-      var cExtent = this.getContainerExtent();
-
-      if (!cExtent) {
+      if (this._aboveCamera()) {
         return null;
       }
 
@@ -11228,26 +11269,24 @@
 
     _proto._clip = function _clip(points, altitude) {
       var map = this.getMap(),
-          geometry = this.geometry,
-          glZoom = map.getGLZoom();
+          geometry = this.geometry;
       var lineWidth = this.getSymbol()['lineWidth'];
 
       if (!isNumber(lineWidth)) {
         lineWidth = 4;
       }
 
-      var containerExtent = map.getContainerExtent();
-      var extent2D = containerExtent.expand(lineWidth).convertTo(function (p) {
-        return map._containerPointToPoint(p, glZoom);
-      });
+      var extent2D = map._get2DExtent(undefined, TEMP_CLIP_EXTENT0)._expand(lineWidth);
 
       if (map.getPitch() > 0 && altitude) {
         var c = map.cameraLookAt;
         var pos = map.cameraPosition;
-        extent2D = extent2D.combine(new Point(pos)._add(sign(c[0] - pos[0]), sign(c[1] - pos[1])));
+        TEMP_POINT0$1.x = pos.x;
+        TEMP_POINT0$1.y = pos.y;
+        extent2D = extent2D._combine(TEMP_POINT0$1._add(sign(c[0] - pos[0]), sign(c[1] - pos[1])));
       }
 
-      var e = this.get2DExtent();
+      var e = this.get2DExtent(null, TEMP_CLIP_EXTENT1);
       var clipPoints = points;
 
       if (e.within(extent2D)) {
@@ -11257,16 +11296,18 @@
         };
       }
 
+      var glExtent2D = map._get2DExtent(map.getGLZoom(), TEMP_CLIP_EXTENT0)._expand(lineWidth / map._glScale);
+
       var smoothness = geometry.options['smoothness'];
 
       if (geometry.getShell && this.geometry.getHoles && !smoothness) {
         if (!Array.isArray(points[0])) {
-          clipPoints = clipPolygon(points, extent2D);
+          clipPoints = clipPolygon(points, glExtent2D);
         } else {
           clipPoints = [];
 
           for (var i = 0; i < points.length; i++) {
-            var part = clipPolygon(points[i], extent2D);
+            var part = clipPolygon(points[i], glExtent2D);
 
             if (part.length) {
               clipPoints.push(part);
@@ -11275,12 +11316,12 @@
         }
       } else if (geometry.getJSONType() === 'LineString') {
         if (!Array.isArray(points[0])) {
-          clipPoints = clipLine(points, extent2D, false, !!smoothness);
+          clipPoints = clipLine(points, glExtent2D, false, !!smoothness);
         } else {
           clipPoints = [];
 
           for (var _i = 0; _i < points.length; _i++) {
-            pushIn(clipPoints, clipLine(points[_i], extent2D, false, !!smoothness));
+            pushIn(clipPoints, clipLine(points[_i], glExtent2D, false, !!smoothness));
           }
         }
 
@@ -11348,7 +11389,7 @@
         return;
       }
 
-      if (extent && !extent.intersects(this.get2DExtent(renderer.resources))) {
+      if (extent && !extent.intersects(this.get2DExtent(renderer.resources, TEMP_PAINT_EXTENT))) {
         return;
       }
 
@@ -11501,7 +11542,7 @@
       }
     };
 
-    _proto.get2DExtent = function get2DExtent(resources) {
+    _proto.get2DExtent = function get2DExtent(resources, out) {
       this._verifyProjection();
 
       var map = this.getMap();
@@ -11530,37 +11571,48 @@
         }
       }
 
+      if (!this._extent2D) {
+        return null;
+      }
+
+      if (out) {
+        out.set(this._extent2D['xmin'], this._extent2D['ymin'], this._extent2D['xmax'], this._extent2D['ymax']);
+
+        out._add(this._fixedExtent);
+
+        return out;
+      }
+
       return this._extent2D.add(this._fixedExtent);
     };
 
-    _proto.getContainerExtent = function getContainerExtent() {
+    _proto.getContainerExtent = function getContainerExtent(out) {
+      if (this._aboveCamera()) {
+        return null;
+      }
+
       this._verifyProjection();
 
       var map = this.getMap();
       var zoom = map.getZoom();
-      var glScale = map.getGLScale();
+      var glScale = map._glScale;
 
       if (!this._extent2D || this._extent2D._zoom !== zoom) {
-        this.get2DExtent();
+        this.get2DExtent(null, TEMP_EXTENT$1);
       }
 
       var altitude = this.getMinAltitude();
-      var frustumAlt = map.getFrustumAltitude();
-
-      if (altitude && frustumAlt && frustumAlt < altitude) {
-        return null;
-      }
 
       var extent = this._extent2D.convertTo(function (c) {
-        return map._pointToContainerPoint(c, zoom, altitude / glScale);
-      });
+        return map._pointToContainerPoint(c, zoom, altitude / glScale, TEMP_POINT0$1);
+      }, out);
 
       var maxAltitude = this.getMaxAltitude();
 
       if (maxAltitude !== altitude) {
         var extent2 = this._extent2D.convertTo(function (c) {
-          return map._pointToContainerPoint(c, zoom, maxAltitude / glScale);
-        });
+          return map._pointToContainerPoint(c, zoom, maxAltitude / glScale, TEMP_POINT0$1);
+        }, TEMP_EXTENT$1);
 
         extent._combine(extent2);
       }
@@ -11569,8 +11621,8 @@
 
       if (this.geometry.type === 'LineString' && maxAltitude && layer.options['drawAltitude']) {
         var groundExtent = this._extent2D.convertTo(function (c) {
-          return map._pointToContainerPoint(c, zoom, 0);
-        });
+          return map._pointToContainerPoint(c, zoom, 0, TEMP_POINT0$1);
+        }, TEMP_EXTENT$1);
 
         extent._combine(groundExtent);
       }
@@ -11588,12 +11640,19 @@
       return extent;
     };
 
+    _proto._aboveCamera = function _aboveCamera() {
+      var altitude = this.getMinAltitude();
+      var map = this.getMap();
+      var frustumAlt = map.getFrustumAltitude();
+      return altitude && frustumAlt && frustumAlt < altitude;
+    };
+
     _proto.getFixedExtent = function getFixedExtent() {
       var map = this.getMap();
       var zoom = map.getZoom();
 
       if (!this._extent2D || this._extent2D._zoom !== zoom) {
-        this.get2DExtent();
+        this.get2DExtent(null, TEMP_FIXED_EXTENT);
       }
 
       return this._fixedExtent;
@@ -11858,6 +11917,8 @@
     return parts;
   }
 
+  var TEMP_EXTENT$2 = new PointExtent();
+
   var CollectionPainter = function (_Class) {
     _inheritsLoose(CollectionPainter, _Class);
 
@@ -11900,11 +11961,15 @@
       });
     };
 
-    _proto.get2DExtent = function get2DExtent(resources) {
-      var extent = new PointExtent();
+    _proto.get2DExtent = function get2DExtent(resources, out) {
+      if (out) {
+        out.set(null, null, null, null);
+      }
+
+      var extent = out || new PointExtent();
 
       this._eachPainter(function (painter) {
-        extent = extent.combine(painter.get2DExtent(resources));
+        extent = extent._combine(painter.get2DExtent(resources, TEMP_EXTENT$2));
       });
 
       return extent;
@@ -12226,10 +12291,10 @@
       }
     };
 
-    _proto.getContainerExtent = function getContainerExtent() {
+    _proto.getContainerExtent = function getContainerExtent(out) {
       var painter = this._getPainter();
 
-      return painter ? painter.getContainerExtent() : null;
+      return painter ? painter.getContainerExtent(out) : null;
     };
 
     _proto.getSize = function getSize() {
@@ -17448,6 +17513,7 @@
   var options$e = {
     'drawImmediate': false
   };
+  var TEMP_EXTENT$3 = new PointExtent();
 
   var OverlayLayer = function (_Layer) {
     _inheritsLoose(OverlayLayer, _Layer);
@@ -17812,10 +17878,10 @@
         }
 
         if (!(geo instanceof LineString) || !geo._getArrowStyle() && !(geo instanceof Curve)) {
-          var extent = geo.getContainerExtent();
+          var extent = geo.getContainerExtent(TEMP_EXTENT$3);
 
           if (tolerance) {
-            extent = extent.expand(tolerance);
+            extent = extent._expand(tolerance);
           }
 
           if (!extent || !extent.contains(cp)) {
@@ -20453,6 +20519,9 @@
       return !!(this._pitch || this._angle);
     },
     getFrustumAltitude: function getFrustumAltitude() {
+      return this._frustumAltitude;
+    },
+    _calcFrustumAltitude: function _calcFrustumAltitude() {
       var pitch = 90 - this.getPitch();
       var fov = this.getFov() / 2;
       var cameraAlt = this.cameraPosition ? this.cameraPosition[2] : 0;
@@ -20497,7 +20566,7 @@
 
           return new Point(t[0], t[1]);
         } else {
-          var centerPoint = this._prjToPoint(this._getPrjCenter(), null, TEMP_COORD);
+          var centerPoint = this._prjToPoint(this._getPrjCenter(), undefined, TEMP_COORD);
 
           if (out) {
             out.x = point.x;
@@ -20580,6 +20649,10 @@
           return;
         }
 
+        delete this._mapRes;
+        delete this._mapGlRes;
+        delete this._mapExtent2D;
+        delete this._mapGlExtent2D;
         var size = this.getSize();
         var w = size.width || 1,
             h = size.height || 1;
@@ -20597,6 +20670,11 @@
         this.projViewMatrix = multiply(this.projViewMatrix || createMat4(), projMatrix, this.viewMatrix);
         this.projViewMatrixInverse = multiply(this.projViewMatrixInverse || createMat4(), worldMatrix, invert(m1, projMatrix));
         this.domCssMatrix = this._calcDomMatrix();
+        this._frustumAltitude = this._calcFrustumAltitude();
+        this._mapRes = this._getResolution();
+        this._mapGlRes = this._getResolution(this.getGLZoom());
+        this._mapExtent2D = this._get2DExtent();
+        this._mapGlExtent2D = this._get2DExtent(this.getGLZoom());
       };
     }(),
     _calcDomMatrix: function () {
@@ -24237,7 +24315,7 @@
         var zoom = map.getZoom();
 
         if (!isInteger(zoom)) {
-          zoom = zoom.toFixed(1);
+          zoom = Math.round(zoom * 10) / 10;
         }
 
         this._levelDOM.innerHTML = zoom;
@@ -24587,10 +24665,11 @@
     'zoomOffset': 0
   };
   var URL_PATTERN = /\{ *([\w_]+) *\}/g;
-  var TEMP_POINT = new Point(0, 0);
-  var TEMP_POINT0$1 = new Point(0, 0);
+  var TEMP_POINT$1 = new Point(0, 0);
+  var TEMP_POINT0$2 = new Point(0, 0);
   var TEMP_POINT1 = new Point(0, 0);
   var TEMP_POINT2 = new Point(0, 0);
+  var TEMP_POINT3 = new Point(0, 0);
   var TEMP_POINT_EXTENT = new PointExtent();
 
   var TileLayer = function (_Layer) {
@@ -24787,7 +24866,7 @@
           mapSR = map.getSpatialReference(),
           res = sr.getResolution(zoom);
       var extent2d = containerExtent.convertTo(function (c) {
-        return map._containerPointToPoint(c, undefined, TEMP_POINT);
+        return map._containerPointToPoint(c, undefined, TEMP_POINT$1);
       });
 
       var innerExtent2D = this._getInnerExtent(z, containerExtent, extent2d)._add(offset);
@@ -24806,50 +24885,58 @@
         }
 
         containerExtent = intersection.convertTo(function (c) {
-          return map._pointToContainerPoint(c, undefined, 0, TEMP_POINT);
+          return map._pointToContainerPoint(c, undefined, 0, TEMP_POINT$1);
         });
       }
 
-      var prjCenter = map._containerPointToPrj(containerExtent.getCenter(), TEMP_POINT2);
+      var prjCenter = map._containerPointToPrj(containerExtent.getCenter(), TEMP_POINT0$2);
 
       var c;
 
       if (hasOffset) {
-        c = this._project(map._pointToPrj(map._prjToPoint(prjCenter)._add(offset)));
+        c = this._project(map._pointToPrj(map._prjToPoint(prjCenter, undefined, TEMP_POINT1)._add(offset), undefined, TEMP_POINT1), TEMP_POINT1);
       } else {
-        c = this._project(prjCenter);
+        c = this._project(prjCenter, TEMP_POINT1);
       }
 
-      TEMP_POINT0$1.x = extent2d.xmin;
-      TEMP_POINT0$1.y = extent2d.ymin;
-      TEMP_POINT1.x = extent2d.xmax;
-      TEMP_POINT1.y = extent2d.ymax;
+      TEMP_POINT2.x = extent2d.xmin;
+      TEMP_POINT2.y = extent2d.ymin;
+      TEMP_POINT3.x = extent2d.xmax;
+      TEMP_POINT3.y = extent2d.ymax;
 
-      var pmin = this._project(map._pointToPrj(TEMP_POINT0$1, undefined, TEMP_POINT0$1));
+      var pmin = this._project(map._pointToPrj(TEMP_POINT2, undefined, TEMP_POINT2), TEMP_POINT2);
 
-      var pmax = this._project(map._pointToPrj(TEMP_POINT1, undefined, TEMP_POINT1));
+      var pmax = this._project(map._pointToPrj(TEMP_POINT3, undefined, TEMP_POINT3), TEMP_POINT3);
 
-      var centerTile = tileConfig.getTileIndex(c, res),
-          ltTile = tileConfig.getTileIndex(pmin, res),
-          rbTile = tileConfig.getTileIndex(pmax, res);
+      var centerTile = tileConfig.getTileIndex(c, res);
+      var ltTile = tileConfig.getTileIndex(pmin, res);
+      var rbTile = tileConfig.getTileIndex(pmax, res);
       var top = Math.ceil(Math.abs(centerTile.y - ltTile.y)),
           left = Math.ceil(Math.abs(centerTile.x - ltTile.x)),
           bottom = Math.ceil(Math.abs(centerTile.y - rbTile.y)),
           right = Math.ceil(Math.abs(centerTile.x - rbTile.x));
+      var tileSize = this.getTileSize();
 
       var layerId = this.getId(),
           renderer = this.getRenderer() || parentRenderer,
-          tileSize = this.getTileSize(),
           scale = this._getTileConfig().tileSystem.scale;
 
       var tiles = [],
           extent = new PointExtent();
 
-      for (var i = -left; i <= right; i++) {
-        var metVisibleTile = false;
+      for (var i = -top; i <= bottom; i++) {
+        var j = -left;
+        var leftVisitEnd = -Infinity;
+        var rightVisitEnd = false;
 
-        for (var j = -top; j <= bottom; j++) {
-          var idx = tileConfig.getNeighorTileIndex(centerTile['x'], centerTile['y'], i, j, res, this.options['repeatWorld']);
+        while (j >= leftVisitEnd && j <= right) {
+          var idx = tileConfig.getNeighorTileIndex(centerTile['x'], centerTile['y'], j, i, res, sr === mapSR && this.options['repeatWorld']);
+
+          if (leftVisitEnd === -Infinity) {
+            j++;
+          } else {
+            j--;
+          }
 
           if (idx.out) {
             continue;
@@ -24872,7 +24959,7 @@
             p = tileInfo.point0;
           } else {
             var pnw = tileConfig.getTilePrjNW(idx.x, idx.y, res);
-            p = map._prjToPoint(this._unproject(pnw), z);
+            p = map._prjToPoint(this._unproject(pnw, TEMP_POINT3), z);
           }
 
           var width = void 0,
@@ -24883,7 +24970,7 @@
             height = tileSize.height;
           } else {
             var pse = tileConfig.getTilePrjSE(idx.x, idx.y, res),
-                pp = map._prjToPoint(this._unproject(pse), z);
+                pp = map._prjToPoint(this._unproject(pse, TEMP_POINT3), z, TEMP_POINT3);
 
             width = Math.abs(Math.round(pp.x - p.x));
             height = Math.abs(Math.round(pp.y - p.y));
@@ -24921,7 +25008,7 @@
 
           var tileExtent = tileInfo.extent2d;
 
-          if (innerExtent2D.intersects(tileExtent) || !innerExtent2D.equals(offsetExtent2D) && this._isTileInExtent(tileInfo, containerExtent)) {
+          if (rightVisitEnd || innerExtent2D.intersects(tileExtent) || !innerExtent2D.equals(offsetExtent2D) && this._isTileInExtent(tileInfo, containerExtent)) {
             if (hasOffset) {
               tileInfo.point = p._add(offset);
               tileInfo.extent2d.set(p.x, p.y, p.x + width, p.y + height);
@@ -24941,14 +25028,17 @@
 
             extent._combine(tileExtent);
 
-            metVisibleTile = true;
-          } else if (metVisibleTile) {
-            break;
+            if (leftVisitEnd === -Infinity) {
+              leftVisitEnd = j;
+              j = right;
+            } else if (!rightVisitEnd) {
+              rightVisitEnd = true;
+            }
           }
         }
       }
 
-      var center = map._containerPointToPoint(containerExtent.getCenter(), z, TEMP_POINT)._add(offset);
+      var center = map._containerPointToPoint(containerExtent.getCenter(), z, TEMP_POINT$1)._add(offset);
 
       tiles.sort(function (a, b) {
         return a.point.distanceTo(center) - b.point.distanceTo(center);
@@ -24992,15 +25082,18 @@
     };
 
     _proto._getTileId = function _getTileId(idx, zoom, id) {
-      return (id || this.getId()) + "__" + idx.idy + "__" + idx.idx + "__" + zoom;
+      return (id || this.getId()) + "-" + idx.idy + "-" + idx.idx + "-" + zoom;
     };
 
     _proto._project = function _project(pcoord, out) {
       var map = this.getMap();
       var sr = this.getSpatialReference();
+      var mapSR = map.getSpatialReference();
 
-      if (sr !== map.getSpatialReference()) {
-        return sr.getProjection().project(map.getProjection().unproject(pcoord, out), out);
+      if (sr !== mapSR) {
+        var mapProjection = map.getProjection();
+        var projection = sr.getProjection();
+        return projection.project(mapProjection.unproject(pcoord, out), out);
       } else {
         return pcoord;
       }
@@ -25009,9 +25102,12 @@
     _proto._unproject = function _unproject(pcoord, out) {
       var map = this.getMap();
       var sr = this.getSpatialReference();
+      var mapSR = map.getSpatialReference();
 
-      if (sr !== map.getSpatialReference()) {
-        return map.getProjection().project(sr.getProjection().unproject(pcoord, out), out);
+      if (sr !== mapSR) {
+        var mapProjection = map.getProjection();
+        var projection = sr.getProjection();
+        return mapProjection.project(projection.unproject(pcoord, out), out);
       } else {
         return pcoord;
       }
@@ -25059,12 +25155,6 @@
     };
 
     _proto._isTileInExtent = function _isTileInExtent(tileInfo, extent) {
-      var map = this.getMap();
-
-      if (!map) {
-        return false;
-      }
-
       if (!this._convertPointCallback) {
         this._convertPointCallback = convertPoint.bind(this);
       }
@@ -25085,6 +25175,11 @@
       delete this._tileConfig;
       delete this._defaultTileConfig;
       delete this._sr;
+      var renderer = this.getRenderer();
+
+      if (renderer) {
+        renderer.clear();
+      }
     };
 
     return TileLayer;
@@ -25094,7 +25189,7 @@
   TileLayer.mergeOptions(options$u);
 
   function convertPoint(c) {
-    return this.getMap()._pointToContainerPoint(c, this._coordTileZoom, 0, TEMP_POINT);
+    return this.getMap()._pointToContainerPoint(c, this._coordTileZoom, 0, TEMP_POINT$1);
   }
 
   var GroupTileLayer = function (_TileLayer) {
@@ -28552,6 +28647,10 @@
     return LRUCache;
   }();
 
+  var TEMP_POINT$2 = new Point(0, 0);
+  var TEMP_POINT1$1 = new Point(0, 0);
+  var TEMP_POINT2$1 = new Point(0, 0);
+
   var TileLayerCanvasRenderer = function (_CanvasRenderer) {
     _inheritsLoose(TileLayerCanvasRenderer, _CanvasRenderer);
 
@@ -29034,7 +29133,7 @@
           tileSize = tileInfo.size,
           zoom = map.getZoom(),
           ctx = this.context,
-          cp = map._pointToContainerPoint(point, tileZoom),
+          cp = map._pointToContainerPoint(point, tileZoom, 0, TEMP_POINT$2),
           bearing = map.getBearing(),
           transformed = bearing || zoom !== tileZoom;
 
@@ -29056,8 +29155,8 @@
           h = tileSize[1];
 
       if (transformed) {
-        w++;
-        h++;
+        w += 0.5;
+        h += 0.5;
         ctx.save();
         ctx.translate(x, y);
 
@@ -29077,17 +29176,19 @@
       Canvas.image(ctx, tileImage, x, y, w, h);
 
       if (this.layer.options['debug']) {
-        var p = new Point(x, y),
-            color = this.layer.options['debugOutline'],
-            xyz = tileId.split('__');
+        var color = this.layer.options['debugOutline'],
+            xyz = tileId.split('-');
         ctx.save();
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
         ctx.strokeWidth = 10;
         ctx.font = '15px monospace';
-        Canvas.rectangle(ctx, p, tileSize, 1, 0);
-        Canvas.fillText(ctx, 'x:' + xyz[2] + ', y:' + xyz[1] + ', z:' + xyz[3], p.add(10, 20), color);
-        Canvas.drawCross(ctx, p.add(w / 2, h / 2), 2, color);
+        Canvas.rectangle(ctx, x, y, {
+          width: w,
+          height: h
+        }, 1, 0);
+        Canvas.fillText(ctx, 'x:' + xyz[2] + ', y:' + xyz[1] + ', z:' + xyz[3], x + 10, y + 20, color);
+        Canvas.drawCross(ctx, x + w / 2, y + h / 2, 2, color);
         ctx.restore();
       }
 
@@ -29114,8 +29215,8 @@
 
       var min = info.extent2d.getMin(),
           max = info.extent2d.getMax(),
-          pmin = layer._project(map._pointToPrj(min, info.z)),
-          pmax = layer._project(map._pointToPrj(max, info.z));
+          pmin = layer._project(map._pointToPrj(min, info.z, TEMP_POINT1$1), TEMP_POINT1$1),
+          pmax = layer._project(map._pointToPrj(max, info.z, TEMP_POINT2$1), TEMP_POINT2$1);
 
       var zoomDiff = 2;
 
@@ -29392,15 +29493,11 @@
     _proto.drawTile = function drawTile(tileInfo, tileImage) {
       var map = this.getMap();
 
-      if (!tileInfo || !map) {
+      if (!tileInfo || !map || !tileImage) {
         return;
       }
 
-      if (tileImage.src === emptyImageUrl) {
-        return;
-      }
-
-      var scale = map.getGLScale(tileInfo.z),
+      var scale = tileInfo._glScale = tileInfo._glScale || map.getGLScale(tileInfo.z),
           w = tileInfo.size[0] * scale,
           h = tileInfo.size[1] * scale;
 
@@ -29517,7 +29614,8 @@
         return true;
       }
 
-      return this.getMap() && !!this.getMap().getPitch() || this.layer && !!this.layer.options['fragmentShader'];
+      var map = this.getMap();
+      return map && (map.getPitch() || map.getBearing()) || this.layer && !!this.layer.options['fragmentShader'];
     };
 
     _proto.deleteTile = function deleteTile(tile) {
@@ -29726,6 +29824,8 @@
     renderer.setToRedraw();
   }
 
+  var TEMP_EXTENT$4 = new PointExtent();
+
   var VectorLayerRenderer = function (_OverlayLayerCanvasRe) {
     _inheritsLoose(VectorLayerRenderer, _OverlayLayerCanvasRe);
 
@@ -29848,8 +29948,9 @@
         return;
       }
 
-      var painter = geo._getPainter(),
-          extent2D = painter.get2DExtent(this.resources);
+      var painter = geo._getPainter();
+
+      var extent2D = painter.get2DExtent(this.resources, TEMP_EXTENT$4);
 
       if (!extent2D || !extent2D.intersects(this._displayExtent)) {
         return;
@@ -30092,13 +30193,14 @@
           this.setLayerCanvasUpdated();
         }
 
-        delete renderer.__shouldZoomTransform;
+        var transformMatrix = renderer.__zoomTransformMatrix;
+        delete renderer.__zoomTransformMatrix;
 
         if (!needsRedraw) {
           if (isCanvas && isInteracting) {
             if (map.isZooming() && !map.getPitch()) {
               renderer.prepareRender();
-              renderer.__shouldZoomTransform = true;
+              renderer.__zoomTransformMatrix = this._zoomMatrix;
             } else if (map.getPitch() || map.isRotating()) {
               renderer.clearCanvas();
             }
@@ -30123,6 +30225,10 @@
           renderer.drawOnInteracting(this._eventParam, framestamp);
         } else {
           renderer.render(framestamp);
+
+          if (isCanvas && transformMatrix && renderer.isLoadingResource()) {
+            renderer.__zoomTransformMatrix = transformMatrix;
+          }
         }
 
         if (isCanvas) {
@@ -30180,7 +30286,7 @@
         return drawTime;
       } else if (map.isZooming() && !map.getPitch() && !map.isRotating()) {
         renderer.prepareRender();
-        renderer.__shouldZoomTransform = true;
+        renderer.__zoomTransformMatrix = this._zoomMatrix;
       } else if (map.getPitch() || map.isRotating()) {
         renderer.clearCanvas();
       }
@@ -30588,19 +30694,18 @@
         ctx.filter = layer.options['cssFilter'];
       }
 
-      var matrix = this._zoomMatrix;
-      var shouldTransform = !!layer._getRenderer().__shouldZoomTransform;
       var renderer = layer.getRenderer();
+      var matrix = renderer.__zoomTransformMatrix;
       var clipped = renderer.clipCanvas(this.context);
 
-      if (matrix && shouldTransform) {
+      if (matrix) {
         ctx.save();
         ctx.setTransform.apply(ctx, matrix);
       }
 
       ctx.drawImage(canvasImage, 0, 0, width, height, point.x, point.y, width, height);
 
-      if (matrix && shouldTransform) {
+      if (matrix) {
         ctx.restore();
       }
 
@@ -30625,7 +30730,7 @@
         if (isFunction(cross)) {
           cross(ctx, p);
         } else {
-          Canvas.drawCross(this.context, p, 2, '#f00');
+          Canvas.drawCross(this.context, p.x, p.y, 2, '#f00');
         }
       }
     };
