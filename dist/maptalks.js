@@ -39,6 +39,156 @@
     'textDy': 1
   };
   var COLOR_PROPERTIES = ['lineColor', 'polygonFill', 'markerFill', 'markerLineColor', 'textFill'];
+  var colorNames = {
+    'aliceblue': [240, 248, 255],
+    'antiquewhite': [250, 235, 215],
+    'aqua': [0, 255, 255],
+    'aquamarine': [127, 255, 212],
+    'azure': [240, 255, 255],
+    'beige': [245, 245, 220],
+    'bisque': [255, 228, 196],
+    'black': [0, 0, 0],
+    'blanchedalmond': [255, 235, 205],
+    'blue': [0, 0, 255],
+    'blueviolet': [138, 43, 226],
+    'brown': [165, 42, 42],
+    'burlywood': [222, 184, 135],
+    'cadetblue': [95, 158, 160],
+    'chartreuse': [127, 255, 0],
+    'chocolate': [210, 105, 30],
+    'coral': [255, 127, 80],
+    'cornflowerblue': [100, 149, 237],
+    'cornsilk': [255, 248, 220],
+    'crimson': [220, 20, 60],
+    'cyan': [0, 255, 255],
+    'darkblue': [0, 0, 139],
+    'darkcyan': [0, 139, 139],
+    'darkgoldenrod': [184, 134, 11],
+    'darkgray': [169, 169, 169],
+    'darkgreen': [0, 100, 0],
+    'darkgrey': [169, 169, 169],
+    'darkkhaki': [189, 183, 107],
+    'darkmagenta': [139, 0, 139],
+    'darkolivegreen': [85, 107, 47],
+    'darkorange': [255, 140, 0],
+    'darkorchid': [153, 50, 204],
+    'darkred': [139, 0, 0],
+    'darksalmon': [233, 150, 122],
+    'darkseagreen': [143, 188, 143],
+    'darkslateblue': [72, 61, 139],
+    'darkslategray': [47, 79, 79],
+    'darkslategrey': [47, 79, 79],
+    'darkturquoise': [0, 206, 209],
+    'darkviolet': [148, 0, 211],
+    'deeppink': [255, 20, 147],
+    'deepskyblue': [0, 191, 255],
+    'dimgray': [105, 105, 105],
+    'dimgrey': [105, 105, 105],
+    'dodgerblue': [30, 144, 255],
+    'firebrick': [178, 34, 34],
+    'floralwhite': [255, 250, 240],
+    'forestgreen': [34, 139, 34],
+    'fuchsia': [255, 0, 255],
+    'gainsboro': [220, 220, 220],
+    'ghostwhite': [248, 248, 255],
+    'gold': [255, 215, 0],
+    'goldenrod': [218, 165, 32],
+    'gray': [128, 128, 128],
+    'green': [0, 128, 0],
+    'greenyellow': [173, 255, 47],
+    'grey': [128, 128, 128],
+    'honeydew': [240, 255, 240],
+    'hotpink': [255, 105, 180],
+    'indianred': [205, 92, 92],
+    'indigo': [75, 0, 130],
+    'ivory': [255, 255, 240],
+    'khaki': [240, 230, 140],
+    'lavender': [230, 230, 250],
+    'lavenderblush': [255, 240, 245],
+    'lawngreen': [124, 252, 0],
+    'lemonchiffon': [255, 250, 205],
+    'lightblue': [173, 216, 230],
+    'lightcoral': [240, 128, 128],
+    'lightcyan': [224, 255, 255],
+    'lightgoldenrodyellow': [250, 250, 210],
+    'lightgray': [211, 211, 211],
+    'lightgreen': [144, 238, 144],
+    'lightgrey': [211, 211, 211],
+    'lightpink': [255, 182, 193],
+    'lightsalmon': [255, 160, 122],
+    'lightseagreen': [32, 178, 170],
+    'lightskyblue': [135, 206, 250],
+    'lightslategray': [119, 136, 153],
+    'lightslategrey': [119, 136, 153],
+    'lightsteelblue': [176, 196, 222],
+    'lightyellow': [255, 255, 224],
+    'lime': [0, 255, 0],
+    'limegreen': [50, 205, 50],
+    'linen': [250, 240, 230],
+    'magenta': [255, 0, 255],
+    'maroon': [128, 0, 0],
+    'mediumaquamarine': [102, 205, 170],
+    'mediumblue': [0, 0, 205],
+    'mediumorchid': [186, 85, 211],
+    'mediumpurple': [147, 112, 219],
+    'mediumseagreen': [60, 179, 113],
+    'mediumslateblue': [123, 104, 238],
+    'mediumspringgreen': [0, 250, 154],
+    'mediumturquoise': [72, 209, 204],
+    'mediumvioletred': [199, 21, 133],
+    'midnightblue': [25, 25, 112],
+    'mintcream': [245, 255, 250],
+    'mistyrose': [255, 228, 225],
+    'moccasin': [255, 228, 181],
+    'navajowhite': [255, 222, 173],
+    'navy': [0, 0, 128],
+    'oldlace': [253, 245, 230],
+    'olive': [128, 128, 0],
+    'olivedrab': [107, 142, 35],
+    'orange': [255, 165, 0],
+    'orangered': [255, 69, 0],
+    'orchid': [218, 112, 214],
+    'palegoldenrod': [238, 232, 170],
+    'palegreen': [152, 251, 152],
+    'paleturquoise': [175, 238, 238],
+    'palevioletred': [219, 112, 147],
+    'papayawhip': [255, 239, 213],
+    'peachpuff': [255, 218, 185],
+    'peru': [205, 133, 63],
+    'pink': [255, 192, 203],
+    'plum': [221, 160, 221],
+    'powderblue': [176, 224, 230],
+    'purple': [128, 0, 128],
+    'rebeccapurple': [102, 51, 153],
+    'red': [255, 0, 0],
+    'rosybrown': [188, 143, 143],
+    'royalblue': [65, 105, 225],
+    'saddlebrown': [139, 69, 19],
+    'salmon': [250, 128, 114],
+    'sandybrown': [244, 164, 96],
+    'seagreen': [46, 139, 87],
+    'seashell': [255, 245, 238],
+    'sienna': [160, 82, 45],
+    'silver': [192, 192, 192],
+    'skyblue': [135, 206, 235],
+    'slateblue': [106, 90, 205],
+    'slategray': [112, 128, 144],
+    'slategrey': [112, 128, 144],
+    'snow': [255, 250, 250],
+    'springgreen': [0, 255, 127],
+    'steelblue': [70, 130, 180],
+    'tan': [210, 180, 140],
+    'teal': [0, 128, 128],
+    'thistle': [216, 191, 216],
+    'tomato': [255, 99, 71],
+    'turquoise': [64, 224, 208],
+    'violet': [238, 130, 238],
+    'wheat': [245, 222, 179],
+    'white': [255, 255, 255],
+    'whitesmoke': [245, 245, 245],
+    'yellow': [255, 255, 0],
+    'yellowgreen': [154, 205, 50]
+  };
 
   function now() {
     return Date.now();
@@ -10145,6 +10295,58 @@
     return DebugSymbolizer;
   }(PointSymbolizer);
 
+  var keyword = /(\D+)/;
+  var hex = /^#([a-f0-9]{6})([a-f0-9]{2})?$/i;
+  var rgba = /^rgba?\(\s*([+-]?\d+)\s*,\s*([+-]?\d+)\s*,\s*([+-]?\d+)\s*(?:,\s*([+-]?[\d\.]+)\s*)?\)$/;
+
+  function getColor(string) {
+    var rgb = [];
+
+    if (string.match(hex)) {
+      var match = string.match(hex);
+      var hexAlpha = match[2];
+      match = match[1];
+
+      for (var i = 0; i < 3; i++) {
+        var i2 = i * 2;
+        rgb[i] = parseInt(match.slice(i2, i2 + 2), 16);
+      }
+
+      if (hexAlpha) {
+        rgb[3] = Math.round(parseInt(hexAlpha, 16) / 255 * 100) / 100;
+      }
+    } else if (string.match(rgba)) {
+      var _match = string.match(rgba);
+
+      for (var _i = 0; _i < 3; _i++) {
+        rgb[_i] = parseInt(_match[_i + 1], 0);
+      }
+
+      if (_match[4]) {
+        rgb[3] = parseFloat(_match[4]);
+      }
+    } else if (string.match(keyword)) {
+      var _match2 = string.match(keyword);
+
+      if (_match2[1] === 'transparent') {
+        return [0, 0, 0, 0];
+      }
+
+      rgb = colorNames[_match2[1]];
+
+      if (!rgb) {
+        return null;
+      }
+
+      rgb[3] = 1;
+      return rgb;
+    } else {
+      return null;
+    }
+
+    return rgb;
+  }
+
   var ImageMarkerSymbolizer = function (_PointSymbolizer) {
     _inheritsLoose(ImageMarkerSymbolizer, _PointSymbolizer);
 
@@ -10165,6 +10367,8 @@
 
       _this = _PointSymbolizer.call(this, symbol, geometry, painter) || this;
       _this.style = _this._defineStyle(_this.translate());
+      _this._tempCanvas = null;
+      _this._tempCtx = null;
       return _this;
     }
 
@@ -10191,6 +10395,27 @@
         }
 
         return;
+      }
+
+      if ('markerReplaceColor' in this.style) {
+        var w = img.width;
+        var h = img.height;
+
+        if (!this._tempCtx) {
+          this._tempCanvas = Canvas.createCanvas(w, h);
+          this._tempCtx = this._tempCanvas.getContext('2d');
+        } else {
+          Canvas.clearRect(this._tempCtx, this._tempCtx.canvas.width, this._tempCtx.canvas.height);
+          this._tempCanvas.width = w;
+          this._tempCanvas.height = h;
+        }
+
+        Canvas.image(this._tempCtx, img, 0, 0, w, h);
+        this.replaceColor_(this._tempCtx, 0, 0, w, h);
+
+        this._tempCtx.restore();
+
+        img = this._tempCanvas;
       }
 
       this._prepareContext(ctx);
@@ -10243,10 +10468,6 @@
 
       if (alpha !== undefined) {
         ctx.globalAlpha = alpha;
-      }
-
-      if ('markerReplaceColor' in this.style) {
-        this.replaceColor_(ctx);
       }
     };
 
@@ -10318,7 +10539,18 @@
         return;
       }
 
-      var color = this.style.markerReplaceColor;
+      var color = null;
+
+      if (Array.isArray(color) && color.length > 2) {
+        color = this.style.markerReplaceColor;
+      } else if (isString(this.style.markerReplaceColor)) {
+        color = getColor(this.style.markerReplaceColor);
+      }
+
+      if (!color) {
+        return;
+      }
+
       var imgData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
       var data = imgData.data;
       var r = color[0] / 255.0;
@@ -10332,6 +10564,10 @@
       }
 
       ctx.putImageData(imgData, 0, 0);
+
+      if (color[3] !== undefined) {
+        ctx.globalAlpha = color[3];
+      }
     };
 
     return ImageMarkerSymbolizer;
@@ -10801,21 +11037,23 @@
     function VectorPathMarkerSymbolizer(symbol, geometry, painter) {
       var _this;
 
+      if (isNil(symbol['markerWidth'])) {
+        symbol['markerWidth'] = 80;
+      }
+
+      if (isNil(symbol['markerHeight'])) {
+        symbol['markerHeight'] = 80;
+      }
+
       _this = _ImageMarkerSymbolize.call(this, symbol, geometry, painter) || this;
-      _this.style = _this._defineStyle(_this.translate());
+      symbol = extend(symbol, _this.translate());
 
-      if (isNil(_this.style['markerWidth'])) {
-        _this.style['markerWidth'] = 80;
-      }
-
-      if (isNil(_this.style['markerHeight'])) {
-        _this.style['markerHeight'] = 80;
-      }
+      var style = _this.style = _this._defineStyle(symbol);
 
       if (Browser$1.gecko) {
-        _this._url = [getMarkerPathBase64(symbol, _this.style['markerWidth'], _this.style['markerHeight']), _this.style['markerWidth'], _this.style['markerHeight']];
+        _this._url = [getMarkerPathBase64(style, style['markerWidth'], style['markerHeight']), style['markerWidth'], style['markerHeight']];
       } else {
-        _this._url = [getMarkerPathBase64(symbol), symbol['markerWidth'], symbol['markerHeight']];
+        _this._url = [getMarkerPathBase64(style), style['markerWidth'], style['markerHeight']];
       }
 
       return _this;
@@ -10826,11 +11064,31 @@
     _proto._prepareContext = function _prepareContext() {};
 
     _proto._getImage = function _getImage(resources) {
+      var _this2 = this;
+
       if (resources && resources.isResourceLoaded(this._url)) {
         return resources.getImage(this._url);
       }
 
+      var painter = this.painter;
       var image = new Image();
+
+      image.onload = function () {
+        var renderer = painter.getLayer() && painter.getLayer().getRenderer();
+
+        if (renderer) {
+          renderer.setToRedraw();
+        }
+      };
+
+      image.onerror = function (err) {
+        if (err && typeof console !== 'undefined') {
+          console.warn(err);
+        }
+
+        resources.markErrorResource(_this2._url);
+      };
+
       image.src = this._url[0];
 
       if (resources) {
@@ -18080,7 +18338,8 @@
     'cacheSvgOnCanvas': Browser$1.gecko,
     'enableAltitude': false,
     'altitudeProperty': 'altitude',
-    'drawAltitude': false
+    'drawAltitude': false,
+    'markerLimitOnZooming': 30
   };
 
   var VectorLayer = function (_OverlayLayer) {
@@ -29906,12 +30165,22 @@
 
       this._updateDisplayExtent();
 
+      this._sortMarkersOnZooming();
+
+      var markers = this._markersOnZooming;
+
       for (var i = 0, l = this._geosToDraw.length; i < l; i++) {
-        if (!this._geosToDraw[i].isVisible()) {
+        var geo = this._geosToDraw[i];
+
+        if (!geo.isVisible()) {
           continue;
         }
 
-        this._geosToDraw[i]._paint(this._displayExtent);
+        if (geo instanceof Marker && markers && !markers[i]) {
+          continue;
+        }
+
+        geo._paint(this._displayExtent);
       }
     };
 
@@ -29941,6 +30210,8 @@
     _proto.prepareToDraw = function prepareToDraw() {
       this._hasPoint = false;
       this._geosToDraw = [];
+      this._markersToDraw = [];
+      this._markersIdx = [];
     };
 
     _proto.checkGeo = function checkGeo(geo) {
@@ -29961,10 +30232,23 @@
       }
 
       this._geosToDraw.push(geo);
+
+      if (geo instanceof Marker) {
+        this._markersToDraw.push(this._geosToDraw.length - 1);
+      }
+    };
+
+    _proto.onZoomStart = function onZoomStart(zoom, origin) {
+      var map = this.getMap();
+      this._zoomOrigin = origin || new Point(map.width / 2, map.height / 2);
+
+      _OverlayLayerCanvasRe.prototype.onZoomStart.apply(this, arguments);
     };
 
     _proto.onZoomEnd = function onZoomEnd() {
       delete this.canvasExtent2D;
+      delete this._markersOnZooming;
+      delete this._zoomOrigin;
 
       _OverlayLayerCanvasRe.prototype.onZoomEnd.apply(this, arguments);
     };
@@ -29982,6 +30266,37 @@
       }
 
       _OverlayLayerCanvasRe.prototype.onGeometryPropertiesChange.call(this, param);
+    };
+
+    _proto._sortMarkersOnZooming = function _sortMarkersOnZooming() {
+      var _this2 = this;
+
+      var map = this.getMap();
+
+      if (!this._isLimitMarkerOnZooming() || this._markersOnZooming) {
+        return;
+      }
+
+      var center = map.containerPointToCoord(this._zoomOrigin);
+
+      this._markersToDraw.sort(function (a, b) {
+        var marker0 = _this2._geosToDraw[a];
+        var marker1 = _this2._geosToDraw[b];
+        return distanceTo$1(marker0.getCoordinates(), center) - distanceTo$1(marker1.getCoordinates(), center);
+      });
+
+      var limit = this.layer.options['markerLimitOnZooming'];
+      var sortedMarkers = this._markersOnZooming = {};
+
+      for (var i = 0; i < limit; i++) {
+        sortedMarkers[this._markersToDraw[i]] = 1;
+      }
+    };
+
+    _proto._isLimitMarkerOnZooming = function _isLimitMarkerOnZooming() {
+      var map = this.getMap();
+      var limit = this.layer.options['markerLimitOnZooming'];
+      return map.isZooming() && this._zoomOrigin && limit > 0 && limit < this._markersToDraw.length;
     };
 
     _proto._updateDisplayExtent = function _updateDisplayExtent() {
@@ -30017,6 +30332,12 @@
   }(OverlayLayerRenderer);
 
   VectorLayer.registerRenderer('canvas', VectorLayerRenderer);
+
+  function distanceTo$1(a, b) {
+    var x = a.x - b.x,
+        y = a.y - b.y;
+    return Math.sqrt(x * x + y * y);
+  }
 
   var MapRenderer = function (_Class) {
     _inheritsLoose(MapRenderer, _Class);
@@ -31378,6 +31699,7 @@
   exports.RESOURCE_SIZE_PROPERTIES = RESOURCE_SIZE_PROPERTIES;
   exports.NUMERICAL_PROPERTIES = NUMERICAL_PROPERTIES;
   exports.COLOR_PROPERTIES = COLOR_PROPERTIES;
+  exports.colorNames = colorNames;
   exports.projection = projections;
   exports.measurer = index$2;
   exports.Coordinate = Coordinate;
