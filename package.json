@@ -45,7 +45,8 @@
     "@maptalks/function-type": "^1.1.0",
     "rbush": "^2.0.2",
     "simplify-js": "^1.2.1",
-    "zousan": "^2.3.3"
+    "zousan": "^2.3.3",
+    "proj4": "^2.5.0"
   },
   "devDependencies": {
     "@babel/core": "^7.0.0",
