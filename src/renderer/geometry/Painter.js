@@ -23,6 +23,8 @@ const registerSymbolizers = [
 let testCanvas;
 
 const TEMP_POINT0 = new Point(0, 0);
+const TEMP_POINT1 = new Point(0, 0);
+const TEMP_POINT2 = new Point(0, 0);
 const TEMP_PAINT_EXTENT = new PointExtent();
 const TEMP_EXTENT = new PointExtent();
 const TEMP_FIXED_EXTENT = new PointExtent();
@@ -276,8 +278,7 @@ class Painter extends Class {
             const c = map.cameraLookAt;
             const pos = map.cameraPosition;
             //add [1px, 1px] towards camera's lookAt
-            TEMP_POINT0.x = pos.x;
-            TEMP_POINT0.y = pos.y;
+            TEMP_POINT0.set(pos.x, pos.y);
             extent2D = extent2D._combine(TEMP_POINT0._add(sign(c[0] - pos[0]), sign(c[1] - pos[1])));
         }
         const e = this.get2DExtent(null, TEMP_CLIP_EXTENT1);
@@ -743,8 +744,8 @@ class Painter extends Class {
         const map = this.getMap();
         const z = map.getGLZoom();
         const target = map.locate(center, altitude, 0);
-        const p0 = map.coordToPoint(center, z),
-            p1 = map.coordToPoint(target, z);
+        const p0 = map.coordToPoint(center, z, TEMP_POINT1),
+            p1 = map.coordToPoint(target, z, TEMP_POINT2);
         return Math.abs(p1.x - p0.x) * sign(altitude);
     }
 

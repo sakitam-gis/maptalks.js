@@ -41,6 +41,7 @@ class MapCanvasRenderer extends MapRenderer {
         const map = this.map;
         map._fireEvent('framestart');
         this.updateMapDOM();
+        map.clearCollisionIndex();
         const layers = this._getAllLayerToRender();
         this.drawLayers(layers, framestamp);
         this.drawLayerCanvas(layers);
