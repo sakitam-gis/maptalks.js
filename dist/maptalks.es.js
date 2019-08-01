@@ -1,9 +1,9 @@
 /*!
- * maptalks v0.44.2
+ * maptalks v1.0.0-alpha.1
  * LICENSE : BSD-3-Clause
  * (c) 2016-2019 maptalks.org
  */
-var version = "0.44.2";
+var version = "1.0.0-alpha.1";
 
 var INTERNAL_LAYER_PREFIX = '_maptalks__internal_layer_';
 var GEOMETRY_COLLECTION_TYPES = ['MultiPoint', 'MultiLineString', 'MultiPolygon', 'GeometryCollection'];
@@ -1485,6 +1485,12 @@ var Position = function () {
 
   var _proto = Position.prototype;
 
+  _proto.set = function set(x, y) {
+    this.x = x;
+    this.y = y;
+    return this;
+  };
+
   _proto.abs = function abs() {
     return new this.constructor(Math.abs(this.x), Math.abs(this.y));
   };
@@ -2427,6 +2433,102 @@ var dom = /*#__PURE__*/Object.freeze({
   on: on,
   off: off
 });
+
+var LRUCache = function () {
+  function LRUCache(max, onRemove) {
+    this.max = max;
+    this.onRemove = onRemove;
+    this.reset();
+  }
+
+  var _proto = LRUCache.prototype;
+
+  _proto.reset = function reset() {
+    for (var key in this.data) {
+      this.onRemove(this.data[key]);
+    }
+
+    this.data = {};
+    this.order = [];
+    return this;
+  };
+
+  _proto.clear = function clear() {
+    this.reset();
+    delete this.onRemove;
+  };
+
+  _proto.add = function add(key, data) {
+    if (this.has(key)) {
+      this.order.splice(this.order.indexOf(key), 1);
+      this.data[key] = data;
+      this.order.push(key);
+    } else {
+      this.data[key] = data;
+      this.order.push(key);
+
+      if (this.order.length > this.max) {
+        var removedData = this.getAndRemove(this.order[0]);
+        if (removedData) this.onRemove(removedData);
+      }
+    }
+
+    return this;
+  };
+
+  _proto.has = function has(key) {
+    return key in this.data;
+  };
+
+  _proto.keys = function keys() {
+    return this.order;
+  };
+
+  _proto.getAndRemove = function getAndRemove(key) {
+    if (!this.has(key)) {
+      return null;
+    }
+
+    var data = this.data[key];
+    delete this.data[key];
+    this.order.splice(this.order.indexOf(key), 1);
+    return data;
+  };
+
+  _proto.get = function get(key) {
+    if (!this.has(key)) {
+      return null;
+    }
+
+    var data = this.data[key];
+    return data;
+  };
+
+  _proto.remove = function remove(key) {
+    if (!this.has(key)) {
+      return this;
+    }
+
+    var data = this.data[key];
+    delete this.data[key];
+    this.onRemove(data);
+    this.order.splice(this.order.indexOf(key), 1);
+    return this;
+  };
+
+  _proto.setMaxSize = function setMaxSize(max) {
+    this.max = max;
+
+    while (this.order.length > this.max) {
+      var removedData = this.getAndRemove(this.order[0]);
+      if (removedData) this.onRemove(removedData);
+    }
+
+    return this;
+  };
+
+  return LRUCache;
+}();
 
 var Ajax = {
   jsonp: function jsonp(url, callback) {
@@ -4331,6 +4433,576 @@ var JSONAble = (function (Base) {
   }(Base);
 });
 
+var quickselect = createCommonjsModule(function (module, exports) {
+  (function (global, factory) {
+    module.exports = factory();
+  })(commonjsGlobal, function () {
+
+    function quickselect(arr, k, left, right, compare) {
+      quickselectStep(arr, k, left || 0, right || arr.length - 1, compare || defaultCompare);
+    }
+
+    function quickselectStep(arr, k, left, right, compare) {
+      while (right > left) {
+        if (right - left > 600) {
+          var n = right - left + 1;
+          var m = k - left + 1;
+          var z = Math.log(n);
+          var s = 0.5 * Math.exp(2 * z / 3);
+          var sd = 0.5 * Math.sqrt(z * s * (n - s) / n) * (m - n / 2 < 0 ? -1 : 1);
+          var newLeft = Math.max(left, Math.floor(k - m * s / n + sd));
+          var newRight = Math.min(right, Math.floor(k + (n - m) * s / n + sd));
+          quickselectStep(arr, k, newLeft, newRight, compare);
+        }
+
+        var t = arr[k];
+        var i = left;
+        var j = right;
+        swap(arr, left, k);
+        if (compare(arr[right], t) > 0) swap(arr, left, right);
+
+        while (i < j) {
+          swap(arr, i, j);
+          i++;
+          j--;
+
+          while (compare(arr[i], t) < 0) {
+            i++;
+          }
+
+          while (compare(arr[j], t) > 0) {
+            j--;
+          }
+        }
+
+        if (compare(arr[left], t) === 0) swap(arr, left, j);else {
+          j++;
+          swap(arr, j, right);
+        }
+        if (j <= k) left = j + 1;
+        if (k <= j) right = j - 1;
+      }
+    }
+
+    function swap(arr, i, j) {
+      var tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+
+    function defaultCompare(a, b) {
+      return a < b ? -1 : a > b ? 1 : 0;
+    }
+
+    return quickselect;
+  });
+});
+
+var rbush_1 = rbush;
+var default_1 = rbush;
+
+function rbush(maxEntries, format) {
+  if (!(this instanceof rbush)) return new rbush(maxEntries, format);
+  this._maxEntries = Math.max(4, maxEntries || 9);
+  this._minEntries = Math.max(2, Math.ceil(this._maxEntries * 0.4));
+
+  if (format) {
+    this._initFormat(format);
+  }
+
+  this.clear();
+}
+
+rbush.prototype = {
+  all: function all() {
+    return this._all(this.data, []);
+  },
+  search: function search(bbox) {
+    var node = this.data,
+        result = [],
+        toBBox = this.toBBox;
+    if (!intersects(bbox, node)) return result;
+    var nodesToSearch = [],
+        i,
+        len,
+        child,
+        childBBox;
+
+    while (node) {
+      for (i = 0, len = node.children.length; i < len; i++) {
+        child = node.children[i];
+        childBBox = node.leaf ? toBBox(child) : child;
+
+        if (intersects(bbox, childBBox)) {
+          if (node.leaf) result.push(child);else if (contains(bbox, childBBox)) this._all(child, result);else nodesToSearch.push(child);
+        }
+      }
+
+      node = nodesToSearch.pop();
+    }
+
+    return result;
+  },
+  collides: function collides(bbox) {
+    var node = this.data,
+        toBBox = this.toBBox;
+    if (!intersects(bbox, node)) return false;
+    var nodesToSearch = [],
+        i,
+        len,
+        child,
+        childBBox;
+
+    while (node) {
+      for (i = 0, len = node.children.length; i < len; i++) {
+        child = node.children[i];
+        childBBox = node.leaf ? toBBox(child) : child;
+
+        if (intersects(bbox, childBBox)) {
+          if (node.leaf || contains(bbox, childBBox)) return true;
+          nodesToSearch.push(child);
+        }
+      }
+
+      node = nodesToSearch.pop();
+    }
+
+    return false;
+  },
+  load: function load(data) {
+    if (!(data && data.length)) return this;
+
+    if (data.length < this._minEntries) {
+      for (var i = 0, len = data.length; i < len; i++) {
+        this.insert(data[i]);
+      }
+
+      return this;
+    }
+
+    var node = this._build(data.slice(), 0, data.length - 1, 0);
+
+    if (!this.data.children.length) {
+      this.data = node;
+    } else if (this.data.height === node.height) {
+      this._splitRoot(this.data, node);
+    } else {
+      if (this.data.height < node.height) {
+        var tmpNode = this.data;
+        this.data = node;
+        node = tmpNode;
+      }
+
+      this._insert(node, this.data.height - node.height - 1, true);
+    }
+
+    return this;
+  },
+  insert: function insert(item) {
+    if (item) this._insert(item, this.data.height - 1);
+    return this;
+  },
+  clear: function clear() {
+    this.data = createNode([]);
+    return this;
+  },
+  remove: function remove(item, equalsFn) {
+    if (!item) return this;
+    var node = this.data,
+        bbox = this.toBBox(item),
+        path = [],
+        indexes = [],
+        i,
+        parent,
+        index,
+        goingUp;
+
+    while (node || path.length) {
+      if (!node) {
+        node = path.pop();
+        parent = path[path.length - 1];
+        i = indexes.pop();
+        goingUp = true;
+      }
+
+      if (node.leaf) {
+        index = findItem(item, node.children, equalsFn);
+
+        if (index !== -1) {
+          node.children.splice(index, 1);
+          path.push(node);
+
+          this._condense(path);
+
+          return this;
+        }
+      }
+
+      if (!goingUp && !node.leaf && contains(node, bbox)) {
+        path.push(node);
+        indexes.push(i);
+        i = 0;
+        parent = node;
+        node = node.children[0];
+      } else if (parent) {
+        i++;
+        node = parent.children[i];
+        goingUp = false;
+      } else node = null;
+    }
+
+    return this;
+  },
+  toBBox: function toBBox(item) {
+    return item;
+  },
+  compareMinX: compareNodeMinX,
+  compareMinY: compareNodeMinY,
+  toJSON: function toJSON() {
+    return this.data;
+  },
+  fromJSON: function fromJSON(data) {
+    this.data = data;
+    return this;
+  },
+  _all: function _all(node, result) {
+    var nodesToSearch = [];
+
+    while (node) {
+      if (node.leaf) result.push.apply(result, node.children);else nodesToSearch.push.apply(nodesToSearch, node.children);
+      node = nodesToSearch.pop();
+    }
+
+    return result;
+  },
+  _build: function _build(items, left, right, height) {
+    var N = right - left + 1,
+        M = this._maxEntries,
+        node;
+
+    if (N <= M) {
+      node = createNode(items.slice(left, right + 1));
+      calcBBox(node, this.toBBox);
+      return node;
+    }
+
+    if (!height) {
+      height = Math.ceil(Math.log(N) / Math.log(M));
+      M = Math.ceil(N / Math.pow(M, height - 1));
+    }
+
+    node = createNode([]);
+    node.leaf = false;
+    node.height = height;
+    var N2 = Math.ceil(N / M),
+        N1 = N2 * Math.ceil(Math.sqrt(M)),
+        i,
+        j,
+        right2,
+        right3;
+    multiSelect(items, left, right, N1, this.compareMinX);
+
+    for (i = left; i <= right; i += N1) {
+      right2 = Math.min(i + N1 - 1, right);
+      multiSelect(items, i, right2, N2, this.compareMinY);
+
+      for (j = i; j <= right2; j += N2) {
+        right3 = Math.min(j + N2 - 1, right2);
+        node.children.push(this._build(items, j, right3, height - 1));
+      }
+    }
+
+    calcBBox(node, this.toBBox);
+    return node;
+  },
+  _chooseSubtree: function _chooseSubtree(bbox, node, level, path) {
+    var i, len, child, targetNode, area, enlargement, minArea, minEnlargement;
+
+    while (true) {
+      path.push(node);
+      if (node.leaf || path.length - 1 === level) break;
+      minArea = minEnlargement = Infinity;
+
+      for (i = 0, len = node.children.length; i < len; i++) {
+        child = node.children[i];
+        area = bboxArea(child);
+        enlargement = enlargedArea(bbox, child) - area;
+
+        if (enlargement < minEnlargement) {
+          minEnlargement = enlargement;
+          minArea = area < minArea ? area : minArea;
+          targetNode = child;
+        } else if (enlargement === minEnlargement) {
+          if (area < minArea) {
+            minArea = area;
+            targetNode = child;
+          }
+        }
+      }
+
+      node = targetNode || node.children[0];
+    }
+
+    return node;
+  },
+  _insert: function _insert(item, level, isNode) {
+    var toBBox = this.toBBox,
+        bbox = isNode ? item : toBBox(item),
+        insertPath = [];
+
+    var node = this._chooseSubtree(bbox, this.data, level, insertPath);
+
+    node.children.push(item);
+    extend$2(node, bbox);
+
+    while (level >= 0) {
+      if (insertPath[level].children.length > this._maxEntries) {
+        this._split(insertPath, level);
+
+        level--;
+      } else break;
+    }
+
+    this._adjustParentBBoxes(bbox, insertPath, level);
+  },
+  _split: function _split(insertPath, level) {
+    var node = insertPath[level],
+        M = node.children.length,
+        m = this._minEntries;
+
+    this._chooseSplitAxis(node, m, M);
+
+    var splitIndex = this._chooseSplitIndex(node, m, M);
+
+    var newNode = createNode(node.children.splice(splitIndex, node.children.length - splitIndex));
+    newNode.height = node.height;
+    newNode.leaf = node.leaf;
+    calcBBox(node, this.toBBox);
+    calcBBox(newNode, this.toBBox);
+    if (level) insertPath[level - 1].children.push(newNode);else this._splitRoot(node, newNode);
+  },
+  _splitRoot: function _splitRoot(node, newNode) {
+    this.data = createNode([node, newNode]);
+    this.data.height = node.height + 1;
+    this.data.leaf = false;
+    calcBBox(this.data, this.toBBox);
+  },
+  _chooseSplitIndex: function _chooseSplitIndex(node, m, M) {
+    var i, bbox1, bbox2, overlap, area, minOverlap, minArea, index;
+    minOverlap = minArea = Infinity;
+
+    for (i = m; i <= M - m; i++) {
+      bbox1 = distBBox(node, 0, i, this.toBBox);
+      bbox2 = distBBox(node, i, M, this.toBBox);
+      overlap = intersectionArea(bbox1, bbox2);
+      area = bboxArea(bbox1) + bboxArea(bbox2);
+
+      if (overlap < minOverlap) {
+        minOverlap = overlap;
+        index = i;
+        minArea = area < minArea ? area : minArea;
+      } else if (overlap === minOverlap) {
+        if (area < minArea) {
+          minArea = area;
+          index = i;
+        }
+      }
+    }
+
+    return index;
+  },
+  _chooseSplitAxis: function _chooseSplitAxis(node, m, M) {
+    var compareMinX = node.leaf ? this.compareMinX : compareNodeMinX,
+        compareMinY = node.leaf ? this.compareMinY : compareNodeMinY,
+        xMargin = this._allDistMargin(node, m, M, compareMinX),
+        yMargin = this._allDistMargin(node, m, M, compareMinY);
+
+    if (xMargin < yMargin) node.children.sort(compareMinX);
+  },
+  _allDistMargin: function _allDistMargin(node, m, M, compare) {
+    node.children.sort(compare);
+    var toBBox = this.toBBox,
+        leftBBox = distBBox(node, 0, m, toBBox),
+        rightBBox = distBBox(node, M - m, M, toBBox),
+        margin = bboxMargin(leftBBox) + bboxMargin(rightBBox),
+        i,
+        child;
+
+    for (i = m; i < M - m; i++) {
+      child = node.children[i];
+      extend$2(leftBBox, node.leaf ? toBBox(child) : child);
+      margin += bboxMargin(leftBBox);
+    }
+
+    for (i = M - m - 1; i >= m; i--) {
+      child = node.children[i];
+      extend$2(rightBBox, node.leaf ? toBBox(child) : child);
+      margin += bboxMargin(rightBBox);
+    }
+
+    return margin;
+  },
+  _adjustParentBBoxes: function _adjustParentBBoxes(bbox, path, level) {
+    for (var i = level; i >= 0; i--) {
+      extend$2(path[i], bbox);
+    }
+  },
+  _condense: function _condense(path) {
+    for (var i = path.length - 1, siblings; i >= 0; i--) {
+      if (path[i].children.length === 0) {
+        if (i > 0) {
+          siblings = path[i - 1].children;
+          siblings.splice(siblings.indexOf(path[i]), 1);
+        } else this.clear();
+      } else calcBBox(path[i], this.toBBox);
+    }
+  },
+  _initFormat: function _initFormat(format) {
+    var compareArr = ['return a', ' - b', ';'];
+    this.compareMinX = new Function('a', 'b', compareArr.join(format[0]));
+    this.compareMinY = new Function('a', 'b', compareArr.join(format[1]));
+    this.toBBox = new Function('a', 'return {minX: a' + format[0] + ', minY: a' + format[1] + ', maxX: a' + format[2] + ', maxY: a' + format[3] + '};');
+  }
+};
+
+function findItem(item, items, equalsFn) {
+  if (!equalsFn) return items.indexOf(item);
+
+  for (var i = 0; i < items.length; i++) {
+    if (equalsFn(item, items[i])) return i;
+  }
+
+  return -1;
+}
+
+function calcBBox(node, toBBox) {
+  distBBox(node, 0, node.children.length, toBBox, node);
+}
+
+function distBBox(node, k, p, toBBox, destNode) {
+  if (!destNode) destNode = createNode(null);
+  destNode.minX = Infinity;
+  destNode.minY = Infinity;
+  destNode.maxX = -Infinity;
+  destNode.maxY = -Infinity;
+
+  for (var i = k, child; i < p; i++) {
+    child = node.children[i];
+    extend$2(destNode, node.leaf ? toBBox(child) : child);
+  }
+
+  return destNode;
+}
+
+function extend$2(a, b) {
+  a.minX = Math.min(a.minX, b.minX);
+  a.minY = Math.min(a.minY, b.minY);
+  a.maxX = Math.max(a.maxX, b.maxX);
+  a.maxY = Math.max(a.maxY, b.maxY);
+  return a;
+}
+
+function compareNodeMinX(a, b) {
+  return a.minX - b.minX;
+}
+
+function compareNodeMinY(a, b) {
+  return a.minY - b.minY;
+}
+
+function bboxArea(a) {
+  return (a.maxX - a.minX) * (a.maxY - a.minY);
+}
+
+function bboxMargin(a) {
+  return a.maxX - a.minX + (a.maxY - a.minY);
+}
+
+function enlargedArea(a, b) {
+  return (Math.max(b.maxX, a.maxX) - Math.min(b.minX, a.minX)) * (Math.max(b.maxY, a.maxY) - Math.min(b.minY, a.minY));
+}
+
+function intersectionArea(a, b) {
+  var minX = Math.max(a.minX, b.minX),
+      minY = Math.max(a.minY, b.minY),
+      maxX = Math.min(a.maxX, b.maxX),
+      maxY = Math.min(a.maxY, b.maxY);
+  return Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
+}
+
+function contains(a, b) {
+  return a.minX <= b.minX && a.minY <= b.minY && b.maxX <= a.maxX && b.maxY <= a.maxY;
+}
+
+function intersects(a, b) {
+  return b.minX <= a.maxX && b.minY <= a.maxY && b.maxX >= a.minX && b.maxY >= a.minY;
+}
+
+function createNode(children) {
+  return {
+    children: children,
+    height: 1,
+    leaf: true,
+    minX: Infinity,
+    minY: Infinity,
+    maxX: -Infinity,
+    maxY: -Infinity
+  };
+}
+
+function multiSelect(arr, left, right, n, compare) {
+  var stack = [left, right],
+      mid;
+
+  while (stack.length) {
+    right = stack.pop();
+    left = stack.pop();
+    if (right - left <= n) continue;
+    mid = left + Math.ceil((right - left) / n / 2) * n;
+    quickselect(arr, mid, left, right, compare);
+    stack.push(left, mid, mid, right);
+  }
+}
+rbush_1["default"] = default_1;
+
+var search = {};
+
+var CollisionIndex = function () {
+  function CollisionIndex() {
+    this._tree = rbush_1(9, ['[0]', '[1]', '[2]', '[3]']);
+  }
+
+  var _proto = CollisionIndex.prototype;
+
+  _proto.collides = function collides(box) {
+    search.minX = box[0];
+    search.minY = box[1];
+    search.maxX = box[2];
+    search.maxY = box[3];
+    return this._tree.collides(search);
+  };
+
+  _proto.insertBox = function insertBox(box) {
+    var tree = this._tree;
+    tree.insert(box);
+    return this;
+  };
+
+  _proto.bulkInsertBox = function bulkInsertBox(boxes) {
+    this._tree.load(boxes);
+
+    return this;
+  };
+
+  _proto.clear = function clear() {
+    this._tree.clear();
+
+    return this;
+  };
+
+  return CollisionIndex;
+}();
+
 function Handlerable (Base) {
   return function (_Base) {
     _inheritsLoose(_class, _Base);
@@ -4655,6 +5327,12 @@ CRS.GCJ02 = CRS.createProj4('+proj=longlat +datum=GCJ02');
 var TEMP_POINT0 = new Point(0, 0);
 var TEMP_COORD0 = new Coordinate(0, 0);
 var TEMP_COORD1 = new Coordinate(0, 0);
+var TEMP_COORD2 = new Coordinate(0, 0);
+var TEMP_COORD3 = new Coordinate(0, 0);
+var TEMP_COORD4 = new Coordinate(0, 0);
+var TEMP_COORD5 = new Coordinate(0, 0);
+var TEMP_COORD6 = new Coordinate(0, 0);
+var TEMP_COORD7 = new Coordinate(0, 0);
 var MINMAX = [];
 var TEMP_EXTENT;
 var TEMP_COMBINE = [];
@@ -4813,16 +5491,34 @@ var Extent = function () {
     return this;
   };
 
-  _proto.getMin = function getMin() {
+  _proto.getMin = function getMin(out) {
+    if (out) {
+      out.set(this['xmin'], this['ymin']);
+      return out;
+    }
+
     return new this._clazz(this['xmin'], this['ymin']);
   };
 
-  _proto.getMax = function getMax() {
+  _proto.getMax = function getMax(out) {
+    if (out) {
+      out.set(this['xmax'], this['ymax']);
+      return out;
+    }
+
     return new this._clazz(this['xmax'], this['ymax']);
   };
 
-  _proto.getCenter = function getCenter() {
-    return new this._clazz((this['xmin'] + this['xmax']) / 2, (this['ymin'] + this['ymax']) / 2);
+  _proto.getCenter = function getCenter(out) {
+    var x = (this['xmin'] + this['xmax']) / 2;
+    var y = (this['ymin'] + this['ymax']) / 2;
+
+    if (out) {
+      out.set(x, y);
+      return out;
+    }
+
+    return new this._clazz(x, y);
   };
 
   _proto.isValid = function isValid() {
@@ -4933,12 +5629,10 @@ var Extent = function () {
     var proj = this.projection;
 
     if (proj) {
-      TEMP_COORD0.x = xmin;
-      TEMP_COORD0.y = ymin;
-      TEMP_COORD1.x = xmax;
-      TEMP_COORD1.y = ymax;
-      var min = proj.unproject(TEMP_COORD0, TEMP_COORD0),
-          max = proj.unproject(TEMP_COORD1, TEMP_COORD1);
+      TEMP_COORD1.set(xmin, ymin);
+      TEMP_COORD2.set(xmax, ymax);
+      var min = proj.unproject(TEMP_COORD1, TEMP_COORD1),
+          max = proj.unproject(TEMP_COORD2, TEMP_COORD2);
       xmin = min.x;
       ymin = min.y;
       xmax = max.x;
@@ -4979,12 +5673,12 @@ var Extent = function () {
       return null;
     }
 
-    TEMP_COORD0.x = Math.max(this['pxmin'], extent['pxmin']);
-    TEMP_COORD0.y = Math.max(this['pymin'], extent['pymin']);
-    TEMP_COORD1.x = Math.min(this['pxmax'], extent['pxmax']);
-    TEMP_COORD1.y = Math.min(this['pymax'], extent['pymax']);
-    var min = TEMP_COORD0,
-        max = TEMP_COORD1;
+    TEMP_COORD3.x = Math.max(this['pxmin'], extent['pxmin']);
+    TEMP_COORD3.y = Math.max(this['pymin'], extent['pymin']);
+    TEMP_COORD4.x = Math.min(this['pxmax'], extent['pxmax']);
+    TEMP_COORD4.y = Math.min(this['pymax'], extent['pymax']);
+    var min = TEMP_COORD3,
+        max = TEMP_COORD4;
     var proj = this.projection;
 
     if (proj) {
@@ -5065,7 +5759,7 @@ var Extent = function () {
     var coord;
 
     if (this._clazz === Coordinate) {
-      coord = TEMP_COORD0;
+      coord = TEMP_COORD5;
     } else if (this._clazz === Point) {
       coord = TEMP_POINT0;
     }
@@ -5099,12 +5793,10 @@ var Extent = function () {
 
     if (proj) {
       if (ext._dirty) {
-        TEMP_COORD0.x = ext.xmax;
-        TEMP_COORD0.y = ext.ymin;
-        TEMP_COORD1.x = ext.xmin;
-        TEMP_COORD1.y = ext.ymax;
-        MINMAX[0] = TEMP_COORD0;
-        MINMAX[1] = TEMP_COORD1;
+        TEMP_COORD6.set(ext.xmax, ext.ymin);
+        TEMP_COORD7.set(ext.xmin, ext.ymax);
+        MINMAX[0] = TEMP_COORD6;
+        MINMAX[1] = TEMP_COORD7;
         var minmax = proj.projectCoords(MINMAX);
         var min = minmax[0],
             max = minmax[1];
@@ -6645,7 +7337,9 @@ var options = {
   'cssFilter': null,
   'forceRenderOnMoving': false,
   'forceRenderOnZooming': false,
-  'forceRenderOnRotating': false
+  'forceRenderOnRotating': false,
+  'collision': false,
+  'collisionScope': 'layer'
 };
 
 var Layer = function (_JSONAble) {
@@ -6967,6 +7661,32 @@ var Layer = function (_JSONAble) {
     return !!this._loaded;
   };
 
+  _proto.getCollisionIndex = function getCollisionIndex() {
+    if (this.options['collisionScope'] === 'layer') {
+      if (!this._collisionIndex) {
+        this._collisionIndex = new CollisionIndex();
+      }
+
+      return this._collisionIndex;
+    }
+
+    var map = this.getMap();
+
+    if (!map) {
+      return null;
+    }
+
+    return map.getCollisionIndex();
+  };
+
+  _proto.clearCollisionIndex = function clearCollisionIndex() {
+    if (this.options['collisionScope'] === 'layer' && this._collisionIndex) {
+      this._collisionIndex.clear();
+    }
+
+    return this;
+  };
+
   _proto.getRenderer = function getRenderer() {
     return this._getRenderer();
   };
@@ -7046,6 +7766,7 @@ var Layer = function (_JSONAble) {
     }
 
     delete this.map;
+    delete this._collisionIndex;
   };
 
   _proto._switchEvents = function _switchEvents(to, emitter) {
@@ -7419,7 +8140,6 @@ var SpatialReference = function () {
   return SpatialReference;
 }();
 
-var TEMP_POINT = new Point(0, 0);
 var options$1 = {
   'maxVisualPitch': 60,
   'maxPitch': 80,
@@ -8276,71 +8996,48 @@ var Map$1 = function (_Handlerable) {
     return null;
   };
 
-  _proto.coordinateToPoint = function coordinateToPoint(coordinate, zoom) {
-    var prjCoord = this.getProjection().project(coordinate);
-    return this._prjToPoint(prjCoord, zoom);
+  _proto.coordToPoint = function coordToPoint(coordinate, zoom, out) {
+    return this.coordinateToPoint(coordinate, zoom, out);
   };
 
-  _proto.coordToPoint = function coordToPoint(coordinate, zoom) {
-    return this.coordinateToPoint(coordinate, zoom);
+  _proto.pointToCoord = function pointToCoord(point, zoom, out) {
+    return this.pointToCoordinate(point, zoom, out);
   };
 
-  _proto.pointToCoordinate = function pointToCoordinate(point, zoom) {
-    var prjCoord = this._pointToPrj(point, zoom);
-
-    return this.getProjection().unproject(prjCoord);
+  _proto.coordToViewPoint = function coordToViewPoint(coordinate, out) {
+    return this.coordinateToViewPoint(coordinate, out);
   };
 
-  _proto.pointToCoord = function pointToCoord(point, zoom) {
-    return this.pointToCoordinate(point, zoom);
+  _proto.viewPointToCoord = function viewPointToCoord(viewPoint, out) {
+    return this.viewPointToCoordinate(viewPoint, out);
   };
 
-  _proto.coordinateToViewPoint = function coordinateToViewPoint(coordinate) {
-    return this._prjToViewPoint(this.getProjection().project(coordinate));
+  _proto.coordToContainerPoint = function coordToContainerPoint(coordinate, zoom, out) {
+    return this.coordinateToContainerPoint(coordinate, zoom, out);
   };
 
-  _proto.coordToViewPoint = function coordToViewPoint(coordinate) {
-    return this.coordinateToViewPoint(coordinate);
+  _proto.containerPointToCoord = function containerPointToCoord(containerPoint, out) {
+    return this.containerPointToCoordinate(containerPoint, out);
   };
 
-  _proto.viewPointToCoordinate = function viewPointToCoordinate(viewPoint) {
-    return this.getProjection().unproject(this._viewPointToPrj(viewPoint));
+  _proto.containerPointToViewPoint = function containerPointToViewPoint(containerPoint, out) {
+    if (out) {
+      out.set(containerPoint.x, containerPoint.y);
+    } else {
+      out = containerPoint.copy();
+    }
+
+    return out._sub(this.getViewPoint());
   };
 
-  _proto.viewPointToCoord = function viewPointToCoord(viewPoint) {
-    return this.viewPointToCoordinate(viewPoint);
-  };
+  _proto.viewPointToContainerPoint = function viewPointToContainerPoint(viewPoint, out) {
+    if (out) {
+      out.set(viewPoint.x, viewPoint.y);
+    } else {
+      out = viewPoint.copy();
+    }
 
-  _proto.coordinateToContainerPoint = function coordinateToContainerPoint(coordinate, zoom) {
-    var pCoordinate = this.getProjection().project(coordinate);
-    return this._prjToContainerPoint(pCoordinate, zoom);
-  };
-
-  _proto.coordToContainerPoint = function coordToContainerPoint(coordinate, zoom) {
-    return this.coordinateToContainerPoint(coordinate, zoom);
-  };
-
-  _proto.containerPointToCoordinate = function containerPointToCoordinate(containerPoint) {
-    var pCoordinate = this._containerPointToPrj(containerPoint);
-
-    return this.getProjection().unproject(pCoordinate);
-  };
-
-  _proto.containerPointToCoord = function containerPointToCoord(containerPoint) {
-    return this.containerPointToCoordinate(containerPoint);
-  };
-
-  _proto.containerPointToViewPoint = function containerPointToViewPoint(containerPoint) {
-    return containerPoint.sub(this.getViewPoint());
-  };
-
-  _proto.viewPointToContainerPoint = function viewPointToContainerPoint(viewPoint) {
-    return viewPoint.add(this.getViewPoint());
-  };
-
-  _proto.containerToExtent = function containerToExtent(containerExtent) {
-    var extent2D = new PointExtent(this._containerPointToPoint(containerExtent.getMin()), this._containerPointToPoint(containerExtent.getMax()));
-    return this._pointToExtent(extent2D);
+    return out._add(this.getViewPoint());
   };
 
   _proto.checkSize = function checkSize() {
@@ -8379,77 +9076,8 @@ var Map$1 = function (_Handlerable) {
     return this;
   };
 
-  _proto.distanceToPixel = function distanceToPixel(xDist, yDist, zoom) {
-    var projection = this.getProjection();
-
-    if (!projection) {
-      return null;
-    }
-
-    var scale = this.getScale() / this.getScale(zoom);
-    var center = this.getCenter(),
-        target = projection.locate(center, xDist, yDist);
-    var p0 = this.coordToContainerPoint(center),
-        p1 = this.coordToContainerPoint(target);
-
-    p1._sub(p0)._multi(scale)._abs();
-
-    return new Size(p1.x, p1.y);
-  };
-
-  _proto.distanceToPoint = function distanceToPoint(xDist, yDist, zoom) {
-    var projection = this.getProjection();
-
-    if (!projection) {
-      return null;
-    }
-
-    var center = this.getCenter(),
-        target = projection.locate(center, xDist, yDist);
-    var p0 = this.coordToPoint(center, zoom),
-        p1 = this.coordToPoint(target, zoom);
-
-    p1._sub(p0)._abs();
-
-    return p1;
-  };
-
-  _proto.pixelToDistance = function pixelToDistance(width, height) {
-    var projection = this.getProjection();
-
-    if (!projection) {
-      return null;
-    }
-
-    var fullExt = this.getFullExtent();
-    var d = fullExt['top'] > fullExt['bottom'] ? -1 : 1;
-    var target = new Point(this.width / 2 + width, this.height / 2 + d * height);
-    var coord = this.containerPointToCoord(target);
-    return projection.measureLength(this.getCenter(), coord);
-  };
-
-  _proto.pointToDistance = function pointToDistance(dx, dy, zoom) {
-    var projection = this.getProjection();
-
-    if (!projection) {
-      return null;
-    }
-
-    var c = this._prjToPoint(this._getPrjCenter(), zoom);
-
-    c._add(dx, dy);
-
-    var target = this.pointToCoord(c, zoom);
-    return projection.measureLength(this.getCenter(), target);
-  };
-
   _proto.locate = function locate(coordinate, dx, dy) {
     return this.getProjection()._locate(new Coordinate(coordinate), dx, dy);
-  };
-
-  _proto.locateByPoint = function locateByPoint(coordinate, px, py) {
-    var point = this.coordToContainerPoint(coordinate);
-    return this.containerPointToCoord(point._add(px, py));
   };
 
   _proto.getMainPanel = function getMainPanel() {
@@ -8556,6 +9184,30 @@ var Map$1 = function (_Handlerable) {
     return !!this._dragRotating;
   };
 
+  _proto.isOffscreen = function isOffscreen(box, viewportPadding) {
+    if (viewportPadding === void 0) {
+      viewportPadding = 0;
+    }
+
+    var width = this.width,
+        height = this.height;
+    var screenRightBoundary = width + viewportPadding;
+    var screenBottomBoundary = height + viewportPadding;
+    var xmin = box.xmin,
+        ymin = box.ymin,
+        xmax = box.xmax,
+        ymax = box.ymax;
+
+    if (Array.isArray(box)) {
+      xmin = box[0];
+      ymin = box[1];
+      xmax = box[2];
+      ymax = box[3];
+    }
+
+    return xmax < viewportPadding || xmin >= screenRightBoundary || ymax < viewportPadding || ymin > screenBottomBoundary;
+  };
+
   _proto.getRenderer = function getRenderer() {
     return this._getRenderer();
   };
@@ -8626,50 +9278,6 @@ var Map$1 = function (_Handlerable) {
     if (panel && panel.style && panel.style.cursor !== cursor) {
       panel.style.cursor = cursor;
     }
-  };
-
-  _proto._get2DExtent = function _get2DExtent(zoom, out) {
-    var _this3 = this;
-
-    var cached;
-
-    if ((zoom === undefined || zoom === this._zoomLevel) && this._mapExtent2D) {
-      cached = this._mapExtent2D;
-    } else if (zoom === this.getGLZoom() && this._mapGlExtent2D) {
-      cached = this._mapGlExtent2D;
-    }
-
-    if (cached) {
-      if (out) {
-        out.set(cached['xmin'], cached['ymin'], cached['xmax'], cached['ymax']);
-        return out;
-      }
-
-      return cached.copy();
-    }
-
-    var cExtent = this.getContainerExtent();
-    return cExtent.convertTo(function (c) {
-      return _this3._containerPointToPoint(c, zoom, TEMP_POINT);
-    }, out);
-  };
-
-  _proto._pointToExtent = function _pointToExtent(extent2D) {
-    var min2d = extent2D.getMin(),
-        max2d = extent2D.getMax();
-    var fullExtent = this.getFullExtent();
-
-    var _ref = !fullExtent || fullExtent.left <= fullExtent.right ? [min2d.x, max2d.x] : [max2d.x, min2d.x],
-        minx = _ref[0],
-        maxx = _ref[1];
-
-    var _ref2 = !fullExtent || fullExtent.top > fullExtent.bottom ? [max2d.y, min2d.y] : [min2d.y, max2d.y],
-        miny = _ref2[0],
-        maxy = _ref2[1];
-
-    var min = new Coordinate(minx, miny),
-        max = new Coordinate(maxx, maxy);
-    return new Extent(this.pointToCoord(min), this.pointToCoord(max), this.getProjection());
   };
 
   _proto._removeLayer = function _removeLayer(layer, layerList) {
@@ -8966,20 +9574,6 @@ var Map$1 = function (_Handlerable) {
     return panelOffset;
   };
 
-  _proto._getViewPointFrameOffset = function _getViewPointFrameOffset() {
-    if (this.isZooming()) {
-      return null;
-    }
-
-    var pcenter = this._getPrjCenter();
-
-    if (this._mapViewCoord && !this._mapViewCoord.equals(pcenter)) {
-      return this._prjToContainerPoint(this._mapViewCoord).sub(this._prjToContainerPoint(pcenter));
-    }
-
-    return null;
-  };
-
   _proto._resetMapViewPoint = function _resetMapViewPoint() {
     this._mapViewPoint = new Point(0, 0);
     this._mapViewCoord = this._getPrjCenter();
@@ -9047,36 +9641,6 @@ var Map$1 = function (_Handlerable) {
     return this._pointToPrj(this._containerPointToPoint(containerPoint, undefined, out), undefined, out);
   };
 
-  _proto._viewPointToPrj = function _viewPointToPrj(viewPoint) {
-    return this._containerPointToPrj(this.viewPointToContainerPoint(viewPoint));
-  };
-
-  _proto._prjToContainerPoint = function _prjToContainerPoint(pCoordinate, zoom) {
-    return this._pointToContainerPoint(this._prjToPoint(pCoordinate, zoom), zoom);
-  };
-
-  _proto._prjToViewPoint = function _prjToViewPoint(pCoordinate) {
-    var containerPoint = this._prjToContainerPoint(pCoordinate);
-
-    return this._containerPointToViewPoint(containerPoint);
-  };
-
-  _proto._containerPointToViewPoint = function _containerPointToViewPoint(containerPoint) {
-    if (!containerPoint) {
-      return null;
-    }
-
-    return containerPoint._sub(this.getViewPoint());
-  };
-
-  _proto._viewPointToPoint = function _viewPointToPoint(viewPoint, zoom) {
-    return this._containerPointToPoint(this.viewPointToContainerPoint(viewPoint), zoom);
-  };
-
-  _proto._pointToViewPoint = function _pointToViewPoint(point, zoom) {
-    return this._prjToViewPoint(this._pointToPrj(point, zoom));
-  };
-
   _proto._callOnLoadHooks = function _callOnLoadHooks() {
     var proto = Map.prototype;
 
@@ -9092,6 +9656,237 @@ var Map$1 = function (_Handlerable) {
   return Map;
 }(Handlerable(Eventable(Renderable(Class))));
 
+Map$1.include({
+  coordinateToPoint: function () {
+    var COORD = new Coordinate(0, 0);
+    return function (coordinate, zoom, out) {
+      var prjCoord = this.getProjection().project(coordinate, COORD);
+      return this._prjToPoint(prjCoord, zoom, out);
+    };
+  }(),
+  pointToCoordinate: function () {
+    var COORD = new Coordinate(0, 0);
+    return function (point, zoom, out) {
+      var prjCoord = this._pointToPrj(point, zoom, COORD);
+
+      return this.getProjection().unproject(prjCoord, out);
+    };
+  }(),
+  coordinateToViewPoint: function () {
+    var COORD = new Coordinate(0, 0);
+    return function (coordinate, out) {
+      return this._prjToViewPoint(this.getProjection().project(coordinate, COORD), out);
+    };
+  }(),
+  viewPointToCoordinate: function () {
+    var COORD = new Coordinate(0, 0);
+    return function (viewPoint, out) {
+      return this.getProjection().unproject(this._viewPointToPrj(viewPoint, COORD), out);
+    };
+  }(),
+  coordinateToContainerPoint: function () {
+    var COORD = new Coordinate(0, 0);
+    return function (coordinate, zoom, out) {
+      var pCoordinate = this.getProjection().project(coordinate, COORD);
+      return this._prjToContainerPoint(pCoordinate, zoom, out);
+    };
+  }(),
+  containerPointToCoordinate: function () {
+    var COORD = new Coordinate(0, 0);
+    return function (containerPoint, out) {
+      var pCoordinate = this._containerPointToPrj(containerPoint, COORD);
+
+      return this.getProjection().unproject(pCoordinate, out);
+    };
+  }(),
+  containerToExtent: function () {
+    var POINT0 = new Point(0, 0);
+    var POINT1 = new Point(0, 0);
+    return function (containerExtent) {
+      var extent2D = new PointExtent(this._containerPointToPoint(containerExtent.getMin(POINT0), undefined, POINT0), this._containerPointToPoint(containerExtent.getMax(POINT1), undefined, POINT1));
+      return this._pointToExtent(extent2D);
+    };
+  }(),
+  distanceToPixel: function () {
+    var POINT0 = new Point(0, 0);
+    var POINT1 = new Point(0, 0);
+    return function (xDist, yDist, zoom) {
+      var projection = this.getProjection();
+
+      if (!projection) {
+        return null;
+      }
+
+      var scale = this.getScale() / this.getScale(zoom);
+      var center = this.getCenter(),
+          target = projection.locate(center, xDist, yDist);
+      var p0 = this.coordToContainerPoint(center, undefined, POINT0),
+          p1 = this.coordToContainerPoint(target, undefined, POINT1);
+
+      p1._sub(p0)._multi(scale)._abs();
+
+      return new Size(p1.x, p1.y);
+    };
+  }(),
+  distanceToPoint: function () {
+    var POINT = new Point(0, 0);
+    return function (xDist, yDist, zoom) {
+      var projection = this.getProjection();
+
+      if (!projection) {
+        return null;
+      }
+
+      var center = this.getCenter(),
+          target = projection.locate(center, xDist, yDist);
+      var p0 = this.coordToPoint(center, zoom, POINT),
+          p1 = this.coordToPoint(target, zoom);
+
+      p1._sub(p0)._abs();
+
+      return p1;
+    };
+  }(),
+  pixelToDistance: function () {
+    var COORD0 = new Coordinate(0, 0);
+    var COORD1 = new Coordinate(0, 0);
+    return function (width, height) {
+      var projection = this.getProjection();
+
+      if (!projection) {
+        return null;
+      }
+
+      var fullExt = this.getFullExtent();
+      var d = fullExt['top'] > fullExt['bottom'] ? -1 : 1;
+      var target = COORD0.set(this.width / 2 + width, this.height / 2 + d * height);
+      var coord = this.containerPointToCoord(target, COORD1);
+      return projection.measureLength(this.getCenter(), coord);
+    };
+  }(),
+  pointToDistance: function () {
+    var POINT = new Point(0, 0);
+    var COORD = new Coordinate(0, 0);
+    return function (dx, dy, zoom) {
+      var projection = this.getProjection();
+
+      if (!projection) {
+        return null;
+      }
+
+      var c = this._prjToPoint(this._getPrjCenter(), zoom, POINT);
+
+      c._add(dx, dy);
+
+      var target = this.pointToCoord(c, zoom, COORD);
+      return projection.measureLength(this.getCenter(), target);
+    };
+  }(),
+  locateByPoint: function () {
+    var POINT = new Point(0, 0);
+    return function (coordinate, px, py) {
+      var point = this.coordToContainerPoint(coordinate, undefined, POINT);
+      return this.containerPointToCoord(point._add(px, py));
+    };
+  }(),
+  _get2DExtent: function () {
+    var POINT = new Point(0, 0);
+    return function (zoom, out) {
+      var _this3 = this;
+
+      var cached;
+
+      if ((zoom === undefined || zoom === this._zoomLevel) && this._mapExtent2D) {
+        cached = this._mapExtent2D;
+      } else if (zoom === this.getGLZoom() && this._mapGlExtent2D) {
+        cached = this._mapGlExtent2D;
+      }
+
+      if (cached) {
+        if (out) {
+          out.set(cached['xmin'], cached['ymin'], cached['xmax'], cached['ymax']);
+          return out;
+        }
+
+        return cached.copy();
+      }
+
+      var cExtent = this.getContainerExtent();
+      return cExtent.convertTo(function (c) {
+        return _this3._containerPointToPoint(c, zoom, POINT);
+      }, out);
+    };
+  }(),
+  _pointToExtent: function () {
+    var COORD0 = new Coordinate(0, 0);
+    var COORD1 = new Coordinate(0, 0);
+    return function (extent2D) {
+      var min2d = extent2D.getMin(),
+          max2d = extent2D.getMax();
+      var fullExtent = this.getFullExtent();
+
+      var _ref = !fullExtent || fullExtent.left <= fullExtent.right ? [min2d.x, max2d.x] : [max2d.x, min2d.x],
+          minx = _ref[0],
+          maxx = _ref[1];
+
+      var _ref2 = !fullExtent || fullExtent.top > fullExtent.bottom ? [max2d.y, min2d.y] : [min2d.y, max2d.y],
+          miny = _ref2[0],
+          maxy = _ref2[1];
+
+      var min = min2d.set(minx, miny);
+      var max = max2d.set(maxx, maxy);
+      return new Extent(this.pointToCoord(min, undefined, COORD0), this.pointToCoord(max, undefined, COORD1), this.getProjection());
+    };
+  }(),
+  _getViewPointFrameOffset: function () {
+    var POINT = new Point(0, 0);
+    return function () {
+      if (this.isZooming()) {
+        return null;
+      }
+
+      var pcenter = this._getPrjCenter();
+
+      if (this._mapViewCoord && !this._mapViewCoord.equals(pcenter)) {
+        return this._prjToContainerPoint(this._mapViewCoord)._sub(this._prjToContainerPoint(pcenter, undefined, POINT));
+      }
+
+      return null;
+    };
+  }(),
+  _viewPointToPrj: function () {
+    var POINT = new Point(0, 0);
+    return function (viewPoint, out) {
+      return this._containerPointToPrj(this.viewPointToContainerPoint(viewPoint, POINT), out);
+    };
+  }(),
+  _prjToContainerPoint: function () {
+    var POINT = new Point(0, 0);
+    return function (pCoordinate, zoom, out) {
+      return this._pointToContainerPoint(this._prjToPoint(pCoordinate, zoom, POINT), zoom, 0, out);
+    };
+  }(),
+  _prjToViewPoint: function () {
+    var POINT = new Point(0, 0);
+    return function (pCoordinate, out) {
+      var containerPoint = this._prjToContainerPoint(pCoordinate, undefined, POINT);
+
+      return this.containerPointToViewPoint(containerPoint, out);
+    };
+  }(),
+  _viewPointToPoint: function () {
+    var POINT = new Point(0, 0);
+    return function (viewPoint, zoom, out) {
+      return this._containerPointToPoint(this.viewPointToContainerPoint(viewPoint, POINT), zoom, out);
+    };
+  }(),
+  _pointToViewPoint: function () {
+    var COORD = new Coordinate(0, 0);
+    return function (point, zoom, out) {
+      return this._prjToViewPoint(this._pointToPrj(point, zoom, COORD), out);
+    };
+  }()
+});
 Map$1.mergeOptions(options$1);
 
 var MapDoubleClickZoomHandler = function (_Handler) {
@@ -9662,6 +10457,9 @@ function setProp(prop, b, p, z) {
   return prop;
 }
 
+var TEMP_POINT0$1 = new Point(0, 0);
+var TEMP_POINT1 = new Point(0, 0);
+
 var PointSymbolizer = function (_CanvasSymbolizer) {
   _inheritsLoose(PointSymbolizer, _CanvasSymbolizer);
 
@@ -9751,8 +10549,8 @@ var PointSymbolizer = function (_CanvasSymbolizer) {
 
     if (map.isTransforming()) {
       var maxZoom = map.getGLZoom();
-      p0 = map._pointToContainerPoint(rotations[i][0], maxZoom);
-      p1 = map._pointToContainerPoint(rotations[i][1], maxZoom);
+      p0 = map._pointToContainerPoint(rotations[i][0], maxZoom, 0, TEMP_POINT0$1);
+      p1 = map._pointToContainerPoint(rotations[i][1], maxZoom, 0, TEMP_POINT1);
     }
 
     return r + computeDegree(p0.x, p0.y, p1.x, p1.y);
@@ -11270,7 +12068,9 @@ var index$3 = /*#__PURE__*/Object.freeze({
 
 var registerSymbolizers = [DrawAltitudeSymbolizer, StrokeAndFillSymbolizer, ImageMarkerSymbolizer, VectorPathMarkerSymbolizer, VectorMarkerSymbolizer, TextMarkerSymbolizer];
 var testCanvas;
-var TEMP_POINT0$1 = new Point(0, 0);
+var TEMP_POINT0$2 = new Point(0, 0);
+var TEMP_POINT1$1 = new Point(0, 0);
+var TEMP_POINT2 = new Point(0, 0);
 var TEMP_PAINT_EXTENT = new PointExtent();
 var TEMP_EXTENT$1 = new PointExtent();
 var TEMP_FIXED_EXTENT = new PointExtent();
@@ -11533,9 +12333,8 @@ var Painter = function (_Class) {
     if (map.getPitch() > 0 && altitude) {
       var c = map.cameraLookAt;
       var pos = map.cameraPosition;
-      TEMP_POINT0$1.x = pos.x;
-      TEMP_POINT0$1.y = pos.y;
-      extent2D = extent2D._combine(TEMP_POINT0$1._add(sign(c[0] - pos[0]), sign(c[1] - pos[1])));
+      TEMP_POINT0$2.set(pos.x, pos.y);
+      extent2D = extent2D._combine(TEMP_POINT0$2._add(sign(c[0] - pos[0]), sign(c[1] - pos[1])));
     }
 
     var e = this.get2DExtent(null, TEMP_CLIP_EXTENT1);
@@ -11856,14 +12655,14 @@ var Painter = function (_Class) {
     var altitude = this.getMinAltitude();
 
     var extent = this._extent2D.convertTo(function (c) {
-      return map._pointToContainerPoint(c, zoom, altitude / glScale, TEMP_POINT0$1);
+      return map._pointToContainerPoint(c, zoom, altitude / glScale, TEMP_POINT0$2);
     }, out);
 
     var maxAltitude = this.getMaxAltitude();
 
     if (maxAltitude !== altitude) {
       var extent2 = this._extent2D.convertTo(function (c) {
-        return map._pointToContainerPoint(c, zoom, maxAltitude / glScale, TEMP_POINT0$1);
+        return map._pointToContainerPoint(c, zoom, maxAltitude / glScale, TEMP_POINT0$2);
       }, TEMP_EXTENT$1);
 
       extent._combine(extent2);
@@ -11873,7 +12672,7 @@ var Painter = function (_Class) {
 
     if (this.geometry.type === 'LineString' && maxAltitude && layer.options['drawAltitude']) {
       var groundExtent = this._extent2D.convertTo(function (c) {
-        return map._pointToContainerPoint(c, zoom, 0, TEMP_POINT0$1);
+        return map._pointToContainerPoint(c, zoom, 0, TEMP_POINT0$2);
       }, TEMP_EXTENT$1);
 
       extent._combine(groundExtent);
@@ -12073,8 +12872,8 @@ var Painter = function (_Class) {
     var map = this.getMap();
     var z = map.getGLZoom();
     var target = map.locate(center, altitude, 0);
-    var p0 = map.coordToPoint(center, z),
-        p1 = map.coordToPoint(target, z);
+    var p0 = map.coordToPoint(center, z, TEMP_POINT1$1),
+        p1 = map.coordToPoint(target, z, TEMP_POINT2);
     return Math.abs(p1.x - p0.x) * sign(altitude);
   };
 
@@ -15960,7 +16759,7 @@ var types$1 = {
   'MultiPolygon': MultiPolygon
 };
 var GeoJSON = {
-  toGeometry: function toGeometry(geoJSON) {
+  toGeometry: function toGeometry(geoJSON, foreachFn) {
     if (isString(geoJSON)) {
       geoJSON = parseJSON(geoJSON);
     }
@@ -15969,7 +16768,7 @@ var GeoJSON = {
       var resultGeos = [];
 
       for (var i = 0, len = geoJSON.length; i < len; i++) {
-        var geo = GeoJSON._convert(geoJSON[i]);
+        var geo = GeoJSON._convert(geoJSON[i], foreachFn);
 
         if (Array.isArray(geo)) {
           pushIn(resultGeos, geo);
@@ -15980,12 +16779,12 @@ var GeoJSON = {
 
       return resultGeos;
     } else {
-      var resultGeo = GeoJSON._convert(geoJSON);
+      var resultGeo = GeoJSON._convert(geoJSON, foreachFn);
 
       return resultGeo;
     }
   },
-  _convert: function _convert(json) {
+  _convert: function _convert(json, foreachFn) {
     if (!json || isNil(json['type'])) {
       return null;
     }
@@ -15995,7 +16794,7 @@ var GeoJSON = {
     if (type === 'Feature') {
       var g = json['geometry'];
 
-      var geometry = GeoJSON._convert(g);
+      var geometry = GeoJSON._convert(g, foreachFn);
 
       if (!geometry) {
         return null;
@@ -16011,16 +16810,27 @@ var GeoJSON = {
         return null;
       }
 
-      var result = GeoJSON.toGeometry(features);
-      return result;
+      return GeoJSON.toGeometry(features, foreachFn);
     } else if (['Point', 'LineString', 'Polygon', 'MultiPoint', 'MultiLineString', 'MultiPolygon'].indexOf(type) >= 0) {
       var clazz = type === 'Point' ? 'Marker' : type;
-      return new types$1[clazz](json['coordinates']);
+      var result = new types$1[clazz](json['coordinates']);
+
+      if (foreachFn) {
+        foreachFn(result);
+      }
+
+      return result;
     } else if (type === 'GeometryCollection') {
       var geometries = json['geometries'];
 
       if (!isArrayHasData(geometries)) {
-        return new GeometryCollection();
+        var _result2 = new GeometryCollection();
+
+        if (foreachFn) {
+          foreachFn(_result2);
+        }
+
+        return _result2;
       }
 
       var mGeos = [];
@@ -16030,7 +16840,13 @@ var GeoJSON = {
         mGeos.push(GeoJSON._convert(geometries[i]));
       }
 
-      return new GeometryCollection(mGeos);
+      var _result = new GeometryCollection(mGeos);
+
+      if (foreachFn) {
+        foreachFn(_result);
+      }
+
+      return _result;
     }
 
     return null;
@@ -18120,7 +18936,7 @@ var OverlayLayer = function (_Layer) {
     var map = this.getMap();
     var point = map.coordToPoint(coordinate);
 
-    var cp = map._pointToContainerPoint(point);
+    var cp = map._pointToContainerPoint(point, undefined, 0, point);
 
     for (var i = geometries.length - 1; i >= 0; i--) {
       var geo = geometries[i];
@@ -20525,6 +21341,12 @@ function cross(out, a, b) {
   out[2] = ax * by - ay * bx;
   return out;
 }
+function dist(a, b) {
+  var x = b[0] - a[0];
+  var y = b[1] - a[1];
+  var z = b[2] - a[2];
+  return Math.sqrt(x * x + y * y + z * z);
+}
 
 function applyMatrix(out, v, e) {
   var x = v[0],
@@ -20902,6 +21724,7 @@ Map$1.include({
         return;
       }
 
+      var sr = this.getSpatialReference();
       delete this._mapRes;
       delete this._mapGlRes;
       delete this._mapExtent2D;
@@ -20910,15 +21733,26 @@ Map$1.include({
       var w = size.width || 1,
           h = size.height || 1;
       this._glScale = this.getGLScale();
-      var fov = this.getFov() * Math.PI / 180;
-      var maxScale = this.getScale(this.getMinZoom()) / this.getScale(this.getMaxNativeZoom());
-      var farZ = maxScale * h / 2 / this._getFovRatio() * 1.4;
-      var projMatrix = this.projMatrix || createMat4();
-      perspective(projMatrix, fov, w / h, 0.1, farZ);
-      this.projMatrix = projMatrix;
 
       var worldMatrix = this._getCameraWorldMatrix();
 
+      var fov = this.getFov() * RADIAN,
+          pitch = this.getPitch() * RADIAN;
+      var halfFov = fov / 2;
+      var groundAngle = Math.PI / 2 + pitch;
+      var topHalfSurfaceDistance = Math.sin(halfFov) * this.cameraToCenterDistance / Math.sin(Math.PI - groundAngle - halfFov);
+      var furthestDistance = Math.cos(Math.PI / 2 - pitch) * topHalfSurfaceDistance + this.cameraToCenterDistance;
+      this.cameraFar = furthestDistance * 10.01;
+
+      if (sr.isEPSG) {
+        this.cameraNear = Math.max(this._glScale * this.getResolution(this.getGLZoom()) * Math.cos(this.getPitch() * RADIAN), 0.1);
+      } else {
+        this.cameraNear = 0.1;
+      }
+
+      var projMatrix = this.projMatrix || createMat4();
+      perspective(projMatrix, fov, w / h, this.cameraNear, this.cameraFar);
+      this.projMatrix = projMatrix;
       this.viewMatrix = invert(m0, worldMatrix);
       this.projViewMatrix = multiply(this.projViewMatrix || createMat4(), projMatrix, this.viewMatrix);
       this.projViewMatrixInverse = multiply(this.projViewMatrixInverse || createMat4(), worldMatrix, invert(m1, projMatrix));
@@ -20970,11 +21804,12 @@ Map$1.include({
 
       var z = scale$$1 * (size.height || 1) / 2 / ratio;
       var cz = z * Math.cos(pitch);
-      var dist = Math.sin(pitch) * z;
-      var cx = center2D.x + dist * Math.sin(bearing);
-      var cy = center2D.y + dist * Math.cos(bearing);
+      var dist$$1 = Math.sin(pitch) * z;
+      var cx = center2D.x + dist$$1 * Math.sin(bearing);
+      var cy = center2D.y + dist$$1 * Math.cos(bearing);
       this.cameraPosition = set$2(this.cameraPosition || [0, 0, 0], cx, cy, cz);
-      var d = dist || 1;
+      this.cameraToCenterDistance = dist(this.cameraPosition, this.cameraLookAt);
+      var d = dist$$1 || 1;
       var up = this.cameraUp = set$2(this.cameraUp || [0, 0, 0], Math.sin(bearing) * d, Math.cos(bearing) * d, 0);
       var m = this.cameraWorldMatrix = this.cameraWorldMatrix || createMat4();
       lookAt(m, this.cameraPosition, this.cameraLookAt, up);
@@ -21135,6 +21970,28 @@ Map$1.include({
 Map$1.mergeOptions({
   'viewHistory': true,
   'viewHistoryCount': 10
+});
+
+Map$1.include({
+  getCollisionIndex: function getCollisionIndex() {
+    if (!this._collisionIndex) {
+      this.createCollisionIndex();
+    }
+
+    return this._collisionIndex || this.createCollisionIndex();
+  },
+  createCollisionIndex: function createCollisionIndex() {
+    this.clearCollisionIndex();
+    this._collisionIndex = new CollisionIndex();
+    return this._collisionIndex;
+  },
+  clearCollisionIndex: function clearCollisionIndex() {
+    if (this._collisionIndex) {
+      this._collisionIndex.clear();
+    }
+
+    return this;
+  }
 });
 
 var options$h = {
@@ -24918,10 +25775,10 @@ var options$u = {
   'zoomOffset': 0
 };
 var URL_PATTERN = /\{ *([\w_]+) *\}/g;
-var TEMP_POINT$1 = new Point(0, 0);
-var TEMP_POINT0$2 = new Point(0, 0);
-var TEMP_POINT1 = new Point(0, 0);
-var TEMP_POINT2 = new Point(0, 0);
+var TEMP_POINT = new Point(0, 0);
+var TEMP_POINT0$3 = new Point(0, 0);
+var TEMP_POINT1$2 = new Point(0, 0);
+var TEMP_POINT2$1 = new Point(0, 0);
 var TEMP_POINT3 = new Point(0, 0);
 var TEMP_POINT_EXTENT = new PointExtent();
 
@@ -25119,7 +25976,7 @@ var TileLayer = function (_Layer) {
         mapSR = map.getSpatialReference(),
         res = sr.getResolution(zoom);
     var extent2d = containerExtent.convertTo(function (c) {
-      return map._containerPointToPoint(c, undefined, TEMP_POINT$1);
+      return map._containerPointToPoint(c, undefined, TEMP_POINT);
     });
 
     var innerExtent2D = this._getInnerExtent(z, containerExtent, extent2d)._add(offset);
@@ -25138,26 +25995,26 @@ var TileLayer = function (_Layer) {
       }
 
       containerExtent = intersection.convertTo(function (c) {
-        return map._pointToContainerPoint(c, undefined, 0, TEMP_POINT$1);
+        return map._pointToContainerPoint(c, undefined, 0, TEMP_POINT);
       });
     }
 
-    var prjCenter = map._containerPointToPrj(containerExtent.getCenter(), TEMP_POINT0$2);
+    var prjCenter = map._containerPointToPrj(containerExtent.getCenter(), TEMP_POINT0$3);
 
     var c;
 
     if (hasOffset) {
-      c = this._project(map._pointToPrj(map._prjToPoint(prjCenter, undefined, TEMP_POINT1)._add(offset), undefined, TEMP_POINT1), TEMP_POINT1);
+      c = this._project(map._pointToPrj(map._prjToPoint(prjCenter, undefined, TEMP_POINT1$2)._add(offset), undefined, TEMP_POINT1$2), TEMP_POINT1$2);
     } else {
-      c = this._project(prjCenter, TEMP_POINT1);
+      c = this._project(prjCenter, TEMP_POINT1$2);
     }
 
-    TEMP_POINT2.x = extent2d.xmin;
-    TEMP_POINT2.y = extent2d.ymin;
+    TEMP_POINT2$1.x = extent2d.xmin;
+    TEMP_POINT2$1.y = extent2d.ymin;
     TEMP_POINT3.x = extent2d.xmax;
     TEMP_POINT3.y = extent2d.ymax;
 
-    var pmin = this._project(map._pointToPrj(TEMP_POINT2, undefined, TEMP_POINT2), TEMP_POINT2);
+    var pmin = this._project(map._pointToPrj(TEMP_POINT2$1, undefined, TEMP_POINT2$1), TEMP_POINT2$1);
 
     var pmax = this._project(map._pointToPrj(TEMP_POINT3, undefined, TEMP_POINT3), TEMP_POINT3);
 
@@ -25291,7 +26148,7 @@ var TileLayer = function (_Layer) {
       }
     }
 
-    var center = map._containerPointToPoint(containerExtent.getCenter(), z, TEMP_POINT$1)._add(offset);
+    var center = map._containerPointToPoint(containerExtent.getCenter(), z, TEMP_POINT)._add(offset);
 
     tiles.sort(function (a, b) {
       return a.point.distanceTo(center) - b.point.distanceTo(center);
@@ -25442,7 +26299,7 @@ TileLayer.registerJSONType('TileLayer');
 TileLayer.mergeOptions(options$u);
 
 function convertPoint(c) {
-  return this.getMap()._pointToContainerPoint(c, this._coordTileZoom, 0, TEMP_POINT$1);
+  return this.getMap()._pointToContainerPoint(c, this._coordTileZoom, 0, TEMP_POINT);
 }
 
 var GroupTileLayer = function (_TileLayer) {
@@ -26774,6 +27631,7 @@ var CanvasLayer = function (_Layer) {
 CanvasLayer.mergeOptions(options$x);
 CanvasLayer.registerRenderer('canvas', CanvasLayerRenderer);
 
+var TEMP_POINT$1 = new Point(0, 0);
 var options$y = {
   'animation': true
 };
@@ -26810,7 +27668,7 @@ var ParticleLayer = function (_CanvasLayer) {
     }
 
     extent = extent.convertTo(function (c) {
-      return map._pointToContainerPoint(c);
+      return map._pointToContainerPoint(c, undefined, 0, TEMP_POINT$1);
     });
     var e = 2 * Math.PI;
 
@@ -28804,105 +29662,9 @@ Geometry.include({
   }
 });
 
-var LRUCache = function () {
-  function LRUCache(max, onRemove) {
-    this.max = max;
-    this.onRemove = onRemove;
-    this.reset();
-  }
-
-  var _proto = LRUCache.prototype;
-
-  _proto.reset = function reset() {
-    for (var key in this.data) {
-      this.onRemove(this.data[key]);
-    }
-
-    this.data = {};
-    this.order = [];
-    return this;
-  };
-
-  _proto.clear = function clear() {
-    this.reset();
-    delete this.onRemove;
-  };
-
-  _proto.add = function add(key, data) {
-    if (this.has(key)) {
-      this.order.splice(this.order.indexOf(key), 1);
-      this.data[key] = data;
-      this.order.push(key);
-    } else {
-      this.data[key] = data;
-      this.order.push(key);
-
-      if (this.order.length > this.max) {
-        var removedData = this.getAndRemove(this.order[0]);
-        if (removedData) this.onRemove(removedData);
-      }
-    }
-
-    return this;
-  };
-
-  _proto.has = function has(key) {
-    return key in this.data;
-  };
-
-  _proto.keys = function keys() {
-    return this.order;
-  };
-
-  _proto.getAndRemove = function getAndRemove(key) {
-    if (!this.has(key)) {
-      return null;
-    }
-
-    var data = this.data[key];
-    delete this.data[key];
-    this.order.splice(this.order.indexOf(key), 1);
-    return data;
-  };
-
-  _proto.get = function get(key) {
-    if (!this.has(key)) {
-      return null;
-    }
-
-    var data = this.data[key];
-    return data;
-  };
-
-  _proto.remove = function remove(key) {
-    if (!this.has(key)) {
-      return this;
-    }
-
-    var data = this.data[key];
-    delete this.data[key];
-    this.onRemove(data);
-    this.order.splice(this.order.indexOf(key), 1);
-    return this;
-  };
-
-  _proto.setMaxSize = function setMaxSize(max) {
-    this.max = max;
-
-    while (this.order.length > this.max) {
-      var removedData = this.getAndRemove(this.order[0]);
-      if (removedData) this.onRemove(removedData);
-    }
-
-    return this;
-  };
-
-  return LRUCache;
-}();
-
 var TEMP_POINT$2 = new Point(0, 0);
-var TEMP_POINT1$1 = new Point(0, 0);
-var TEMP_POINT2$1 = new Point(0, 0);
+var TEMP_POINT1$3 = new Point(0, 0);
+var TEMP_POINT2$2 = new Point(0, 0);
 
 var TileLayerCanvasRenderer = function (_CanvasRenderer) {
   _inheritsLoose(TileLayerCanvasRenderer, _CanvasRenderer);
@@ -29468,8 +30230,8 @@ var TileLayerCanvasRenderer = function (_CanvasRenderer) {
 
     var min = info.extent2d.getMin(),
         max = info.extent2d.getMax(),
-        pmin = layer._project(map._pointToPrj(min, info.z, TEMP_POINT1$1), TEMP_POINT1$1),
-        pmax = layer._project(map._pointToPrj(max, info.z, TEMP_POINT2$1), TEMP_POINT2$1);
+        pmin = layer._project(map._pointToPrj(min, info.z, TEMP_POINT1$3), TEMP_POINT1$3),
+        pmax = layer._project(map._pointToPrj(max, info.z, TEMP_POINT2$2), TEMP_POINT2$2);
 
     var zoomDiff = 2;
 
@@ -29953,6 +30715,170 @@ var GLRenderer = function (_TileLayerGLRenderer) {
 CanvasTileLayer.registerRenderer('canvas', CanvasRenderer$1);
 CanvasTileLayer.registerRenderer('gl', GLRenderer);
 
+var quadVertices = typeof Int8Array !== 'undefined' ? new Int8Array([-1, 1, 0, -1, -1, 0, 1, 1, 0, 1, -1, 0]) : [];
+var vert = "\n    attribute vec3 a_position;\n    uniform mat4 transform;\n\n    void main()\n    {\n        gl_Position = transform * vec4(a_position, 1.0);\n    }\n";
+var frag = "\n    precision mediump float;\n    uniform vec3 color;\n    void main()\n    {\n        gl_FragColor = vec4(color, 1.0);\n    }\n";
+
+var QuadStencil = function () {
+  function QuadStencil(gl, vertices, debug) {
+    this.gl = gl;
+    this.quadVertices = vertices || quadVertices;
+    this.attributes = ['a_position', 3, getType(vertices)];
+    this.debug = debug;
+  }
+
+  var _proto = QuadStencil.prototype;
+
+  _proto.start = function start() {
+    var gl = this.gl;
+    gl.enable(gl.STENCIL_TEST);
+    gl.stencilMask(0xFF);
+    gl.stencilOp(gl.KEEP, gl.REPLACE, gl.REPLACE);
+    gl.depthMask(false);
+
+    this._save();
+
+    if (!this.buffer) {
+      this._createBuffer();
+
+      this._createProgram();
+    }
+
+    gl.useProgram(this.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    enableVertexAttrib(gl, this.program, this.attributes);
+
+    if (!this.transformLoc) {
+      this.transformLoc = gl.getUniformLocation(this.program, 'transform');
+    }
+
+    if (!this.colorLoc) {
+      this.colorLoc = gl.getUniformLocation(this.program, 'color');
+    }
+
+    if (this.debug) {
+      return;
+    }
+
+    gl.colorMask(false, false, false, false);
+  };
+
+  _proto.end = function end() {
+    var gl = this.gl;
+    gl.depthMask(true);
+
+    this._restore();
+
+    if (this.debug) {
+      return;
+    }
+
+    gl.colorMask(true, true, true, true);
+  };
+
+  _proto.draw = function draw(transform) {
+    var gl = this.gl;
+    gl.uniformMatrix4fv(this.transformLoc, false, transform);
+    gl.uniform3fv(this.colorLoc, [Math.random(), Math.random(), Math.random()]);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+
+  _proto.remove = function remove() {
+    var gl = this.gl;
+
+    if (this.buffer) {
+      gl.deleteBuffer(this.buffer);
+    }
+
+    if (this.program) {
+      gl.deleteShader(this.program.fragmentShader);
+      gl.deleteShader(this.program.vertexShader);
+      gl.deleteProgram(this.program);
+    }
+
+    delete this.transformLoc;
+    delete this.gl;
+    return this;
+  };
+
+  _proto.stencilMask = function stencilMask(mask) {
+    this.gl.stencilMask(mask);
+    return this;
+  };
+
+  _proto.stencilFunc = function stencilFunc(func, ref, mask) {
+    this.ref = ref;
+    this.gl.stencilFunc(func, ref, mask);
+    return this;
+  };
+
+  _proto.stencilOp = function stencilOp(fail, zfail, zpass) {
+    this.gl.stencilOp(fail, zfail, zpass);
+    return this;
+  };
+
+  _proto.resetFunc = function resetFunc() {
+    this.ref = 1;
+    this.gl.stencilFunc(this.gl.ALWAYS, 1, 0xFF);
+    return this;
+  };
+
+  _proto._save = function _save() {
+    var gl = this.gl;
+    this._savedProgram = gl.program;
+  };
+
+  _proto._restore = function _restore() {
+    var gl = this.gl;
+    gl.program = this._savedProgram;
+
+    if (gl.program) {
+      gl.useProgram(gl.program);
+    }
+  };
+
+  _proto._createBuffer = function _createBuffer() {
+    var gl = this.gl;
+    this.buffer = gl.createBuffer();
+
+    if (!this.buffer) {
+      throw new Error('Failed to create the buffer object');
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.quadVertices, gl.STATIC_DRAW);
+  };
+
+  _proto._createProgram = function _createProgram() {
+    var _createProgram2 = createProgram(this.gl, vert, frag),
+        program = _createProgram2.program,
+        vertexShader = _createProgram2.vertexShader,
+        fragmentShader = _createProgram2.fragmentShader;
+
+    program.vertexShader = vertexShader;
+    program.fragmentShader = fragmentShader;
+    this.program = program;
+  };
+
+  return QuadStencil;
+}();
+
+function getType(arr) {
+  if (arr instanceof Float32Array) {
+    return 'FLOAT';
+  } else if (arr instanceof Int16Array) {
+    return 'SHORT';
+  } else if (arr instanceof Uint16Array) {
+    return 'UNSIGNED_SHORT';
+  } else if (arr instanceof Int8Array) {
+    return 'BYTE';
+  } else if (arr instanceof Uint8Array || arr instanceof Uint8ClampedArray) {
+    return 'UNSIGNED_BYTE';
+  }
+
+  return 'FLOAT';
+}
+
 var OverlayLayerRenderer = function (_CanvasRenderer) {
   _inheritsLoose(OverlayLayerRenderer, _CanvasRenderer);
 
@@ -30433,6 +31359,7 @@ var MapCanvasRenderer = function (_MapRenderer) {
     map._fireEvent('framestart');
 
     this.updateMapDOM();
+    map.clearCollisionIndex();
 
     var layers = this._getAllLayerToRender();
 
@@ -31243,6 +32170,7 @@ var index$6 = /*#__PURE__*/Object.freeze({
   TileLayerGLRenderer: TileLayerGLRenderer,
   CanvasTileLayerCanvasRenderer: CanvasRenderer$1,
   CanvasTileLayerGLRenderer: GLRenderer,
+  QuadStencil: QuadStencil,
   OverlayLayerCanvasRenderer: OverlayLayerRenderer,
   VectorLayerCanvasRenderer: VectorLayerRenderer,
   CanvasLayerRenderer: CanvasLayerRenderer
@@ -31659,6 +32587,220 @@ Polygon.include({
   }
 });
 
-Map$1.VERSION = version;
+var adapters = {};
+function registerWorkerAdapter(workerKey, adapter) {
+  adapters[workerKey] = adapter;
+}
+var header = "\n    var adapters = {};\n    onmessage = function (msg) {\n        msg = msg.data;\n        var workerKey = msg.workerKey;\n        var adapter = adapters[workerKey];\n        if (!adapter) {\n            post(msg.callback, 'Unregistered worker adapters for ' + workerKey);\n            return;\n        }\n        try {\n            adapter.onmessage(msg, wrap(msg.callback));\n        } catch (err) {\n            post(msg.callback, workerKey + ':' + err.message);\n            console.error(err);\n            throw err;\n        }\n    };\n    function post(callback, err, data, buffers) {\n        var msg = {\n            callback : callback\n        };\n        if (err) {\n            msg.error = err;\n        } else {\n            msg.data = data;\n        }\n        if (buffers && buffers.length > 0) {\n            postMessage(msg, buffers);\n        } else {\n            postMessage(msg);\n        }\n    }\n    function wrap(callback) {\n        return function (err, data, buffers) {\n            post(callback, err, data, buffers);\n        };\n    }\n    var workerExports;\n";
+var footer = "\n    workerExports = null;\n";
 
-export { index$1 as Util, dom as DomUtil, strings as StringUtil, index as MapboxUtil, Map$1 as Map, index$4 as ui, index$5 as control, index$6 as renderer, index$3 as symbolizer, Animation$1 as animation, Browser$1 as Browser, Ajax, Canvas, Promise$1 as Promise, Class, Eventable, JSONAble, Handlerable, Handler$1 as Handler, DragHandler, MapTool, DrawTool, AreaTool, DistanceTool, SpatialReference, INTERNAL_LAYER_PREFIX, GEOMETRY_COLLECTION_TYPES, GEOJSON_TYPES, RESOURCE_PROPERTIES, RESOURCE_SIZE_PROPERTIES, NUMERICAL_PROPERTIES, COLOR_PROPERTIES, colorNames, projections as projection, index$2 as measurer, Coordinate, CRS, Extent, Point, PointExtent, Size, Transformation, Layer, TileLayer, GroupTileLayer, WMSTileLayer, CanvasTileLayer, ImageLayer, OverlayLayer, VectorLayer, CanvasLayer, ParticleLayer, TileSystem, TileConfig, ArcCurve, Circle, ConnectorLine, ArcConnectorLine, CubicBezierCurve, Curve, Ellipse, GeoJSON, Geometry, GeometryCollection, Label, LineString, Marker, MultiLineString, MultiPoint, MultiPolygon, Polygon, QuadBezierCurve, Rectangle, Sector, TextBox, TextMarker };
+function compileWorkerSource() {
+  var source = header;
+
+  for (var p in adapters) {
+    var adapter = adapters[p];
+    source += "\n    workerExports = {};\n    (" + adapter + ")(workerExports, self);\n    adapters['" + p + "'] = workerExports";
+    source += "\n    workerExports.initialize && workerExports.initialize(self);\n        ";
+  }
+
+  source += footer;
+  return source;
+}
+
+var url;
+function getWorkerSourcePath() {
+  if (!url) {
+    var source = compileWorkerSource();
+    url = window.URL.createObjectURL(new Blob([source], {
+      type: 'text/javascript'
+    }));
+    adapters = null;
+  }
+
+  return url;
+}
+
+var hardwareConcurrency = window.navigator.hardwareConcurrency || 4;
+var workerCount = Math.max(Math.floor(hardwareConcurrency / 2), 1);
+
+var WorkerPool = function () {
+  function WorkerPool() {
+    this.active = {};
+    this.workerCount = window.MAPTALKS_WORKER_COUNT || workerCount;
+  }
+
+  var _proto = WorkerPool.prototype;
+
+  _proto.acquire = function acquire(id) {
+    if (!this.workers) {
+      this.workers = [];
+      var url = getWorkerSourcePath();
+
+      for (var i = 0; i < this.workerCount; i++) {
+        var worker = new Worker(url);
+        worker.id = i;
+        this.workers.push(worker);
+      }
+    }
+
+    this.active[id] = true;
+    return this.workers.slice();
+  };
+
+  _proto.release = function release(id) {
+    delete this.active[id];
+
+    if (Object.keys(this.active).length === 0) {
+      this.workers.forEach(function (w) {
+        w.terminate();
+      });
+      this.workers = null;
+    }
+  };
+
+  return WorkerPool;
+}();
+var globalWorkerPool;
+function getGlobalWorkerPool() {
+  if (!globalWorkerPool) {
+    globalWorkerPool = new WorkerPool();
+  }
+
+  return globalWorkerPool;
+}
+
+var dedicatedWorker = 0;
+var EMPTY_BUFFERS = [];
+
+var Actor = function () {
+  function Actor(workerKey) {
+    var _this = this;
+
+    this.workerKey = workerKey;
+    this.workerPool = getGlobalWorkerPool();
+    this.currentActor = 0;
+    this.actorId = UID();
+    this.workers = this.workerPool.acquire(this.actorId);
+    this.callbacks = {};
+    this.callbackID = 0;
+    this.receiveFn = this.receive.bind(this);
+    this.workers.forEach(function (w) {
+      w.addEventListener('message', _this.receiveFn, false);
+    });
+  }
+
+  var _proto = Actor.prototype;
+
+  _proto.isActive = function isActive() {
+    return !!this.workers;
+  };
+
+  _proto.broadcast = function broadcast(data, buffers, cb) {
+    var _this2 = this;
+
+    cb = cb || function () {};
+
+    asyncAll(this.workers, function (worker, done) {
+      _this2.send(data, buffers, done, worker.id);
+    }, cb);
+    return this;
+  };
+
+  _proto.send = function send(data, buffers, cb, workerId) {
+    var id = cb ? this.actorId + ":" + this.callbackID++ : null;
+    if (cb) this.callbacks[id] = cb;
+    this.post({
+      data: data,
+      callback: String(id)
+    }, buffers, workerId);
+    return this;
+  };
+
+  _proto.receive = function receive(message) {
+    var _this3 = this;
+
+    var data = message.data,
+        id = data.callback;
+    var callback = this.callbacks[id];
+    delete this.callbacks[id];
+
+    if (data.type === '<request>') {
+      if (this.actorId === data.actorId) {
+        this[data.command](data.params, function (err, cbData, buffers) {
+          var message = {
+            type: '<response>',
+            callback: data.callback
+          };
+
+          if (err) {
+            message.error = err.message;
+          } else {
+            message.data = cbData;
+          }
+
+          _this3.post(message, buffers || EMPTY_BUFFERS, data.workerId);
+        });
+      }
+    } else if (callback && data.error) {
+      callback(data.error);
+    } else if (callback) {
+      callback(null, data.data);
+    }
+  };
+
+  _proto.remove = function remove() {
+    var _this4 = this;
+
+    this.workers.forEach(function (w) {
+      w.removeEventListener('message', _this4.receiveFn, false);
+    });
+    this.workerPool.release(this.actorId);
+    delete this.receiveFn;
+    delete this.workers;
+    delete this.callbacks;
+    delete this.workerPool;
+  };
+
+  _proto.post = function post(data, buffers, targetID) {
+    if (typeof targetID !== 'number' || isNaN(targetID)) {
+      targetID = this.currentActor = (this.currentActor + 1) % this.workerPool.workerCount;
+    }
+
+    data.workerId = targetID;
+    data.workerKey = this.workerKey;
+    data.actorId = this.actorId;
+    this.workers[targetID].postMessage(data, buffers || EMPTY_BUFFERS);
+    return targetID;
+  };
+
+  _proto.getDedicatedWorker = function getDedicatedWorker() {
+    dedicatedWorker = (dedicatedWorker + 1) % this.workerPool.workerCount;
+    return dedicatedWorker;
+  };
+
+  return Actor;
+}();
+
+function asyncAll(array, fn, callback) {
+  if (!array.length) {
+    callback(null, []);
+  }
+
+  var remaining = array.length;
+  var results = new Array(array.length);
+  var error = null;
+  array.forEach(function (item, i) {
+    fn(item, function (err, result) {
+      if (err) error = err;
+      results[i] = result;
+      if (--remaining === 0) callback(error, results);
+    });
+  });
+}
+
+Map$1.VERSION = version;
+var worker = {
+  Actor: Actor
+};
+
+export { index$1 as Util, dom as DomUtil, strings as StringUtil, index as MapboxUtil, Map$1 as Map, index$4 as ui, index$5 as control, index$6 as renderer, index$3 as symbolizer, Animation$1 as animation, worker, Browser$1 as Browser, LRUCache, Ajax, Canvas, Promise$1 as Promise, Class, Eventable, JSONAble, CollisionIndex, Handlerable, Handler$1 as Handler, DragHandler, MapTool, DrawTool, AreaTool, DistanceTool, SpatialReference, registerWorkerAdapter, INTERNAL_LAYER_PREFIX, GEOMETRY_COLLECTION_TYPES, GEOJSON_TYPES, RESOURCE_PROPERTIES, RESOURCE_SIZE_PROPERTIES, NUMERICAL_PROPERTIES, COLOR_PROPERTIES, colorNames, projections as projection, index$2 as measurer, Coordinate, CRS, Extent, Point, PointExtent, Size, Transformation, Layer, TileLayer, GroupTileLayer, WMSTileLayer, CanvasTileLayer, ImageLayer, OverlayLayer, VectorLayer, CanvasLayer, ParticleLayer, TileSystem, TileConfig, ArcCurve, Circle, ConnectorLine, ArcConnectorLine, CubicBezierCurve, Curve, Ellipse, GeoJSON, Geometry, GeometryCollection, Label, LineString, Marker, MultiLineString, MultiPoint, MultiPolygon, Polygon, QuadBezierCurve, Rectangle, Sector, TextBox, TextMarker };
