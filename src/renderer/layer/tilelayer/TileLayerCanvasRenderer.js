@@ -465,8 +465,8 @@ class TileLayerCanvasRenderer extends CanvasRenderer {
             y = cp.y;
         let w = tileSize[0], h = tileSize[1];
         if (transformed) {
-            w += 0.5;
-            h += 0.5;
+            w += 0.1;
+            h += 0.1;
             ctx.save();
             ctx.translate(x, y);
             if (bearing) {
@@ -488,7 +488,7 @@ class TileLayerCanvasRenderer extends CanvasRenderer {
             ctx.strokeWidth = 10;
             ctx.font = '15px monospace';
             Canvas2D.rectangle(ctx, x, y, { width: w, height: h }, 1, 0);
-            Canvas2D.fillText(ctx, 'x:' + xyz[2] + ', y:' + xyz[1] + ', z:' + xyz[3], x + 10, y + 20, color);
+            Canvas2D.fillText(ctx, 'x:' + xyz[xyz.length - 3] + ', y:' + xyz[xyz.length - 2] + ', z:' + xyz[xyz.length - 1], x + 10, y + 20, color);
             Canvas2D.drawCross(ctx, x + w / 2, y + h / 2, 2, color);
             ctx.restore();
         }

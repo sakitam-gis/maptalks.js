@@ -26080,10 +26080,12 @@ var TileLayer = function (_Layer) {
           height = tileSize.height;
         } else {
           var pse = tileConfig.getTilePrjSE(idx.x, idx.y, res),
-              pp = map._prjToPoint(this._unproject(pse, TEMP_POINT3), z, TEMP_POINT3);
+              pp = map._prjToPoint(this._unproject(pse, TEMP_POINT3), z, TEMP_POINT3)._round();
 
-          width = Math.abs(Math.round(pp.x - p.x));
-          height = Math.abs(Math.round(pp.y - p.y));
+          var point = p._round();
+
+          width = Math.abs(pp.x - point.x);
+          height = Math.abs(pp.y - point.y);
         }
 
         var dx = scale.x * (idx.idx - idx.x) * width,
@@ -26091,11 +26093,6 @@ var TileLayer = function (_Layer) {
 
         if (dx || dy) {
           p._add(dx, dy);
-        }
-
-        if (sr !== mapSR) {
-          width++;
-          height++;
         }
 
         if (hasOffset) {
@@ -30170,8 +30167,8 @@ var TileLayerCanvasRenderer = function (_CanvasRenderer) {
         h = tileSize[1];
 
     if (transformed) {
-      w += 0.5;
-      h += 0.5;
+      w += 0.1;
+      h += 0.1;
       ctx.save();
       ctx.translate(x, y);
 
@@ -30202,7 +30199,7 @@ var TileLayerCanvasRenderer = function (_CanvasRenderer) {
         width: w,
         height: h
       }, 1, 0);
-      Canvas.fillText(ctx, 'x:' + xyz[2] + ', y:' + xyz[1] + ', z:' + xyz[3], x + 10, y + 20, color);
+      Canvas.fillText(ctx, 'x:' + xyz[xyz.length - 3] + ', y:' + xyz[xyz.length - 2] + ', z:' + xyz[xyz.length - 1], x + 10, y + 20, color);
       Canvas.drawCross(ctx, x + w / 2, y + h / 2, 2, color);
       ctx.restore();
     }
