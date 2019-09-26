@@ -112,7 +112,6 @@ const options = {
     'maxZoom': null,
     'minZoom': null,
     'maxExtent': null,
-    'maxRestrictExtent': null, // 默认不限制
     'fixCenterOnResize' : false,
 
     'checkSize': true,
@@ -120,14 +119,6 @@ const options = {
 
     'renderer': 'canvas'
 };
-
-export function mercatorXfromLng(lng) {
-    return (180 + lng) / 360;
-}
-
-export function mercatorYfromLat(lat) {
-    return (180 - (180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)))) / 360;
-}
 
 /**
  * The central class of the library, to create a map on a container.
@@ -210,12 +201,6 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
 
         this._zoomLevel = zoom;
         this._center = center;
-
-        /**
-         * 地图视图限制范围
-         * @type {Extent}
-         */
-        this.restrictExtent(opts.maxRestrictExtent);
 
         this.setSpatialReference(opts['spatialReference'] || opts['view']);
 
@@ -454,7 +439,9 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
             return this;
         }
         center = new Coordinate(center);
-        if (!this._verifyExtent(center)) {
+        const projection = this.getProjection();
+        const pcenter = projection.project(center);
+        if (!this._verifyExtent(pcenter)) {
             return this;
         }
         if (!this._loaded) {
@@ -462,9 +449,7 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
             return this;
         }
         this.onMoveStart();
-        const projection = this.getProjection();
-        const _pcenter = projection.project(center);
-        this._setPrjCenter(_pcenter);
+        this._setPrjCenter(pcenter);
         this.onMoveEnd(this._parseEventFromCoord(this.getCenter()));
         return this;
     }
@@ -553,12 +538,14 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
         if (extent) {
             const maxExt = new Extent(extent, this.getProjection());
             this.options['maxExtent'] = maxExt;
-            const center = this.getCenter();
-            if (!this._verifyExtent(center)) {
-                this.panTo(maxExt.getCenter());
+            if (!this._verifyExtent(this._getPrjCenter())) {
+                this._panTo(this._prjMaxExtent().getCenter());
             }
+            const projection = this.getProjection();
+            this._prjMaxExtent = maxExt.convertTo(c => projection.project(c));
         } else {
             delete this.options['maxExtent'];
+            delete this._prjMaxExtent;
         }
         return this;
     }
@@ -890,7 +877,7 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
         const zoom = this.getFitZoom(extent) + (zoomOffset || 0);
         const center = extent.getCenter();
         if (typeof (options['animation']) === 'undefined' || options['animation'])
-            return this.animateTo({
+            return this._animateTo({
                 center,
                 zoom
             }, {
@@ -1443,7 +1430,7 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
      * @fires Map#movestart
      */
     onMoveStart(param) {
-        this._originCenter = this.getCenter();
+        this._originCenter = this._getPrjCenter();
         this._moving = true;
         this._trySetCursor('move');
         /**
@@ -1490,12 +1477,12 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
          * @property {Event} domEvent                 - dom event
          */
         this._fireEvent('moveend',  (param && param['domEvent']) ? this._parseEvent(param['domEvent'], 'moveend') : param);
-        if (!this._verifyExtent(this.getCenter())) {
+        if (!this._verifyExtent(this._getPrjCenter())) {
             let moveTo = this._originCenter;
             if (!this._verifyExtent(moveTo)) {
                 moveTo = this.getMaxExtent().getCenter();
             }
-            this.panTo(moveTo);
+            this._panTo(moveTo);
         }
     }
 
@@ -1840,105 +1827,15 @@ class Map extends Handlerable(Eventable(Renderable(Class))) {
         return this;
     }
 
-    /**
-     * 设置地图限制范围
-     * @param extent
-     */
-    restrictExtent(extent) {
-        if (extent) {
-            this.maxRestrictExtent = new Extent(extent);
-        } else {
-            this.maxRestrictExtent = null;
-        }
-    }
-
-    scaleZoom(scale) { return Math.log(scale) / Math.LN2; }
-
-    _constrain() {
-        if (!this.center || !this.width || !this.height || this._constraining) return;
-
-        this._constraining = true;
-
-        const scale = Math.pow(2, this.zoom - 1);
-
-        const worldSize = 512 * scale;
-
-        let minY = -90;
-        let maxY = 90;
-        let minX = -180;
-        let maxX = 180;
-        let sy, sx, x2, y2;
-        const size = this.size;
-        let latRange, lngRange;
-        if (this.maxRestrictExtent) {
-            const min = this.maxRestrictExtent.getMin();
-            const max = this.maxRestrictExtent.getMax();
-            lngRange = [min.xmin, max.xmax];
-            latRange = [min.ymin, max.ymax];
-        }
-
-
-        if (latRange) {
-            minY = mercatorYfromLat(latRange[1]) * worldSize;
-            maxY = mercatorYfromLat(latRange[0]) * worldSize;
-            sy = maxY - minY < size.y ? size.y / (maxY - minY) : 0;
-        }
-
-        if (lngRange) {
-            minX = mercatorXfromLng(lngRange[0]) * worldSize;
-            maxX = mercatorXfromLng(lngRange[1]) * worldSize;
-            sx = maxX - minX < size.x ? size.x / (maxX - minX) : 0;
-        }
-
-        const point = this.point;
-
-        // how much the map should scale to fit the screen into given latitude/longitude ranges
-        const s = Math.max(sx || 0, sy || 0);
-
-        if (s) {
-            this.center = this.unproject(new Point(
-                sx ? (maxX + minX) / 2 : point.x,
-                sy ? (maxY + minY) / 2 : point.y));
-            this.zoom += this.scaleZoom(s);
-            this._constraining = false;
-            return;
-        }
-
-        if (latRange) {
-            const y = point.y,
-                h2 = size.y / 2;
-
-            if (y - h2 < minY) y2 = minY + h2;
-            if (y + h2 > maxY) y2 = maxY - h2;
-        }
-
-        if (lngRange) {
-            const x = point.x,
-                w2 = size.x / 2;
-
-            if (x - w2 < minX) x2 = minX + w2;
-            if (x + w2 > maxX) x2 = maxX - w2;
-        }
-
-        // pan the map if the screen goes off the range
-        if (x2 !== undefined || y2 !== undefined) {
-            this.center = this.unproject(new Point(
-                x2 !== undefined ? x2 : point.x,
-                y2 !== undefined ? y2 : point.y));
-        }
-
-        this._constraining = false;
-    }
-
-    _verifyExtent(center) {
-        if (!center) {
+    _verifyExtent(prjCenter) {
+        if (!prjCenter) {
             return false;
         }
-        const maxExt = this.getMaxExtent();
+        const maxExt = this._prjMaxExtent;
         if (!maxExt) {
             return true;
         }
-        return maxExt.contains(center);
+        return maxExt.contains(prjCenter);
     }
 
     /**
