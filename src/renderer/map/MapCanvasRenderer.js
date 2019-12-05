@@ -38,12 +38,16 @@ class MapCanvasRenderer extends MapRenderer {
         if (!this.map) {
             return false;
         }
+        delete this._isViewChanged;
         const map = this.map;
         map._fireEvent('framestart');
         this.updateMapDOM();
         const layers = this._getAllLayerToRender();
         this.drawLayers(layers, framestamp);
-        this.drawLayerCanvas(layers);
+        const updated = this.drawLayerCanvas(layers);
+        if (updated) {
+            this._drawCenterCross();
+        }
         // CAUTION: the order to fire frameend and layerload events
         // fire frameend before layerload, reason:
         // 1. frameend is often used internally by maptalks and plugins
@@ -283,10 +287,10 @@ class MapCanvasRenderer extends MapRenderer {
     drawLayerCanvas(layers) {
         const map = this.map;
         if (!map) {
-            return;
+            return false;
         }
         if (!this.isLayerCanvasUpdated() && !this.isViewChanged()) {
-            return;
+            return false;
         }
         if (!this.canvas) {
             this.createCanvas();
@@ -343,8 +347,6 @@ class MapCanvasRenderer extends MapRenderer {
             this._drawLayerCanvasImage(images[i][0], images[i][1]);
         }
 
-
-        this._drawCenterCross();
         /**
          * renderend event, an event fired when map ends rendering.
          * @event Map#renderend
@@ -356,6 +358,7 @@ class MapCanvasRenderer extends MapRenderer {
         map._fireEvent('renderend', {
             'context': this.context
         });
+        return true;
     }
 
     setToRedraw() {
@@ -532,12 +535,13 @@ class MapCanvasRenderer extends MapRenderer {
      * @return {Boolean}
      */
     isViewChanged() {
+        if (this._isViewChanged !== undefined) {
+            return this._isViewChanged;
+        }
         const previous = this._mapview;
         const view = this._getMapView();
-        if (!previous || !equalMapView(previous, view)) {
-            return true;
-        }
-        return false;
+        this._isViewChanged = !previous || !equalMapView(previous, view);
+        return this._isViewChanged;
     }
 
     _recordView() {
