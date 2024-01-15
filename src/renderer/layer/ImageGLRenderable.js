@@ -71,7 +71,10 @@ const ImageGLRenderable = Base => {
          * @param {Number} y - y at map's gl zoom
          * @param {Number} w - width at map's gl zoom
          * @param {Number} h - height at map's gl zoom
+         * @param scale
          * @param {Number} opacity
+         * @param debug
+         * @param baseColor
          */
         drawGLImage(image, x, y, w, h, scale, opacity, debug, baseColor) {
             if (this.gl.program !== this.program) {
@@ -162,7 +165,7 @@ const ImageGLRenderable = Base => {
             gl.uniform1f(this.program['u_debug_line'], 1);
             gl.uniform4fv(this.program['u_base_color'], DEFAULT_BASE_COLOR);
             gl.uniform1f(this.program['u_alpha_test'], this.layer.options['alphaTest'] || 0);
-            gl.drawArrays(gl.LINE_STRIP, 0, 5);
+            gl.drawArrays(gl.LINE_STRIP, 0, 4);
             //draw debug info
             let canvas = this._debugInfoCanvas;
             if (!canvas) {
