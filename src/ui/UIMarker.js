@@ -326,7 +326,7 @@ class UIMarker extends Handlerable(UIComponent) {
 
     onAdd() {
         if (this._owner && !this._owner.isMap) {
-            throw new Error('UIMarker Can only be added to the map, but owner is:', this._owner.getJSONType());
+            throw new Error('UIMarker Can only be added to the map, but owner is:', this._owner.getJSONType && this._owner.getJSONType());
         }
         this.show();
         return this;
@@ -362,6 +362,8 @@ class UIMarker extends Handlerable(UIComponent) {
      * @return {HTMLElement} UIMarker's HTMLElement
      */
     buildOn() {
+        const oldDom = this.getDOM();
+        this._bindDomEvents(oldDom, 'off');
         let dom;
         const content = this.options['content'];
         const isStr = isString(content);
@@ -380,6 +382,7 @@ class UIMarker extends Handlerable(UIComponent) {
             dom.className = this.options['containerClass'];
         }
         this._registerDOMEvents(dom);
+        this._bindDomEvents(dom, 'on');
         return dom;
     }
 

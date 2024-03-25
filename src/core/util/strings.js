@@ -12,6 +12,8 @@ import Size from '../../geo/Size';
  * @name StringUtil
  */
 
+export const EMPTY_STRING = '';
+
 /**
  * Trim the string
  * @param {String} str
@@ -35,7 +37,7 @@ export function escapeSpecialChars(str) {
     if (!isString(str)) {
         return str;
     }
-    return str.replace(specialPattern, '');
+    return str.replace(specialPattern, EMPTY_STRING);
 }
 
 /**
@@ -145,8 +147,8 @@ export function splitContent(content, font, wrapWidth, textWidth) {
 // const contentExpRe = /\{([\w_]+)\}/g;
 // export const CONTENT_EXPRE = /{([^}.]+)}/;
 // export const CONTENT_EXPRE = /{([\u0000-\u0019\u0021-\uFFFF]+)}/g;
-export const CONTENT_EXPRE = /\{([\w_]+)\}/g;
-
+// export const CONTENT_EXPRE = /\{([\w_]+)\}/g;
+const TEMPLATE_CHARS = ['{', '}'];
 /**
  * Replace variables wrapped by square brackets ({foo}) with actual values in props.
  * @example
@@ -161,18 +163,53 @@ export function replaceVariable(str, props) {
     if (!isString(str)) {
         return str;
     }
-    return str.replace(CONTENT_EXPRE, function (str, key) {
+
+    function getValue(key) {
         if (!props) {
-            return '';
+            return EMPTY_STRING;
         }
         const value = props[key];
         if (isNil(value)) {
-            return '';
+            return EMPTY_STRING;
         } else if (Array.isArray(value)) {
             return value.join();
         }
         return value;
-    });
+    }
+    const [left, right] = TEMPLATE_CHARS;
+    const keys = templateKeys(str);
+    for (let i = 0, len = keys.length; i < len; i++) {
+        const key = keys[i];
+        const value = getValue(key);
+        str = str.replaceAll(`${left}${key}${right}`, value);
+    }
+    return str;
+}
+
+function templateKeys(str) {
+    str += EMPTY_STRING;
+    const [left, right] = TEMPLATE_CHARS;
+    const keys = [];
+    let start = false;
+    let key = EMPTY_STRING;
+    for (let i = 0, len = str.length; i < len; i++) {
+        const char = str[i];
+        if (!start && char === left) {
+            start = true;
+        }
+        if (char === left && start) {
+            key = EMPTY_STRING;
+        }
+        if (start && (char !== left && char !== right)) {
+            key += char;
+        }
+        if (char === right && key) {
+            start = false;
+            keys.push(key);
+            key = EMPTY_STRING;
+        }
+    }
+    return keys;
 }
 
 /**
@@ -223,7 +260,7 @@ export function getAlignPoint(size, horizontalAlignment, verticalAlignment) {
 }
 
 //export it for plugin develop
-export const DEFAULT_FONT = 'monospace';
+export const DEFAULT_FONT = 'sans-serif';
 export const DEFAULT_TEXTSIZE = 14;
 
 /**
@@ -243,8 +280,23 @@ export function getFont(style) {
         return (style['textStyle'] && style['textStyle'] !== 'normal' ? style['textStyle'] + ' ' : '') +
             (style['textWeight'] && style['textWeight'] !== 'normal' ? style['textWeight'] + ' ' : '') +
             textSize + 'px ' +
-            (style['textFaceName'] ? style['textFaceName'] : DEFAULT_FONT);
+            (style['textFaceName'] && formatFontFamily(style['textFaceName']) || DEFAULT_FONT);
     }
+}
+
+function formatFontFamily(font) {
+    const fonts = font.split(',');
+    for (let i = 0; i < fonts.length; i++) {
+        if (fonts[i].trim) {
+            fonts[i] = fonts[i].trim();
+        }
+        // quote font name with space
+        // e.g. "Gill Sans Extrabold", sans-serif
+        if (fonts[i].indexOf(' ') > 0 && fonts[i][0] !== '"' && fonts[i][0] !== '\'') {
+            fonts[i] = '"' + fonts[i] + '"';
+        }
+    }
+    return fonts.join(',');
 }
 
 /**

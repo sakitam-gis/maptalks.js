@@ -51,8 +51,6 @@ class TileWorkerConnection extends Actor {
     }
 }
 
-const BLANK_IMAGE = new Image();
-
 /**
  * @classdesc
  * Renderer class based on HTML5 Canvas2D for TileLayers
@@ -189,7 +187,8 @@ class TileLayerCanvasRenderer extends CanvasRenderer {
         const loadingLimit = this._getLoadLimit();
 
         const l = tileGrids.length;
-        const isFirstRender = this._tileZoom === undefined && !this._terrainHelper;
+        // !this._terrainHelper can't be deleted as parent tiles are part of terrain skin, maptalks/issues#608
+        const isFirstRender = this._tileZoom === undefined && layer.options['currentTilesFirst'] && !this._terrainHelper;
         // main tile grid is the last one (draws on top)
         this._tileZoom = tileGrids[0]['zoom'];
 
@@ -759,7 +758,10 @@ class TileLayerCanvasRenderer extends CanvasRenderer {
     }
 
     resetTileLoadTime(tileImage) {
-        tileImage.loadTime = now();
+        // loadTime = 0 means a tile from onTileError
+        if (tileImage.loadTime !== 0) {
+            tileImage.loadTime = now();
+        }
     }
 
     onTileError(tileImage, tileInfo) {
@@ -785,7 +787,6 @@ class TileLayerCanvasRenderer extends CanvasRenderer {
                 tileImage.src = errorUrl;
             }
         }
-        tileImage = tileImage instanceof Image ? tileImage : BLANK_IMAGE;
         this.abortTileLoading(tileImage, tileInfo);
 
         tileImage.loadTime = 0;

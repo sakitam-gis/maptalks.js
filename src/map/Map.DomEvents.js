@@ -1,4 +1,4 @@
-import Browser from '../core/Browser';
+import GlobalConfig from '../GlobalConfig';
 import { now, extend } from '../core/util';
 import {
     addDomEvent,
@@ -223,7 +223,7 @@ Map.include(/** @lends Map.prototype */ {
         }
         const clickTimeThreshold = this.options['clickTimeThreshold'];
         const type = e.type;
-        if (isMoveEvent(type) && !Browser.isTest && isMousemoveEventBlocked(this, this.options['mousemoveThrottleTime'])) {
+        if (isMoveEvent(type) && !GlobalConfig.isTest && isMousemoveEventBlocked(this, this.options['mousemoveThrottleTime'])) {
             return;
         }
         const isMouseDown = type === 'mousedown' || (type === 'touchstart' && (!e.touches || e.touches.length === 1));
@@ -330,6 +330,12 @@ Map.include(/** @lends Map.prototype */ {
         return false;
     },
 
+    _wrapTerrainData(eventParam) {
+        if (eventParam.containerPoint && !eventParam.terrain) {
+            eventParam.terrain = this._queryTerrainInfo(eventParam.containerPoint);
+        }
+    },
+
     _parseEvent(e, type) {
         if (!e) {
             return null;
@@ -355,6 +361,7 @@ Map.include(/** @lends Map.prototype */ {
                 }
             }
         }
+        this._wrapTerrainData(eventParam);
         return eventParam;
     },
 
@@ -382,6 +389,7 @@ Map.include(/** @lends Map.prototype */ {
         }
 
         const eventParam = this._parseEvent(e, type);
+        this._wrapTerrainData(eventParam);
         if (isMoveEvent(type)) {
             this.getRenderer().callInNextFrame(() => {
                 if (eventParam.domEvent && eventParam.domEvent._cancelBubble) {
@@ -417,6 +425,7 @@ Map.include(/** @lends Map.prototype */ {
             eventParam['viewPoint'] = map.containerPointToViewPoint(containerPoint);
             eventParam['pont2d'] = map._containerPointToPoint(containerPoint);
         }
+        this._wrapTerrainData(eventParam);
         return eventParam;
     }
 });

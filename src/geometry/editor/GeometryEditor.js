@@ -34,7 +34,11 @@ const options = {
     //symbols of edit handles
     'centerHandleSymbol': createHandleSymbol('ellipse', 1),
     'vertexHandleSymbol': createHandleSymbol('square', 1),
-    'newVertexHandleSymbol': createHandleSymbol('square', 0.4)
+    'newVertexHandleSymbol': createHandleSymbol('square', 0.4),
+    'collision': false,
+    'collisionBufferSize': 0,
+    'vertexZIndex': 0,
+    'newVertexZIndex': 0
 };
 
 /**
@@ -848,6 +852,7 @@ class GeometryEditor extends Eventable(Class) {
 
         const verticeLimit = geoToEdit instanceof Polygon ? 3 : 2;
         const propertyOfVertexIndex = 'maptalks--editor-vertex-index';
+        const { vertexZIndex, newVertexZIndex } = this.options;
         //{ ringIndex:ring }
         const vertexHandles = { 0: [] },
             newVertexHandles = { 0: [] };
@@ -999,6 +1004,7 @@ class GeometryEditor extends Eventable(Class) {
             handle[propertyOfVertexIndex] = index;
             handle._ringIndex = ringIndex;
             handle.on(me.options['removeVertexOn'], removeVertex);
+            handle.setZIndex(vertexZIndex);
             return handle;
         }
 
@@ -1074,6 +1080,7 @@ class GeometryEditor extends Eventable(Class) {
                 }
             });
             handle[propertyOfVertexIndex] = index;
+            handle.setZIndex(newVertexZIndex);
             return handle;
         }
         if (geoToEdit instanceof Polygon) {
@@ -1106,6 +1113,10 @@ class GeometryEditor extends Eventable(Class) {
             if (newVertexHandles[ringIndex].length && geoToEdit.getCoordinates().length === 2) {
                 newVertexHandles[ringIndex][0].options.symbol['markerDx'] = 12;
             }
+        }
+        const renderer = map.getRenderer();
+        if (renderer) {
+            renderer.sortTopElements();
         }
         this._addRefreshHook(() => {
             if (pauseRefresh) {

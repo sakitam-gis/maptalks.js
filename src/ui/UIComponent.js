@@ -835,7 +835,7 @@ class UIComponent extends Eventable(Class) {
             if (this.options['rotateWithMap'] && bearing) {
                 r += ` rotateZ(${Math.round(-bearing)}deg)`;
             }
-            return 'translate3d(' + p.x + 'px,' + p.y + 'px, 0px)' + r;
+            return 'translate3d(' + Math.fround(p.x) + 'px,' + Math.fround(p.y) + 'px, 0px)' + r;
         } else {
             return 'translate(' + p.x + 'px,' + p.y + 'px)';
         }
@@ -887,6 +887,45 @@ class UIComponent extends Eventable(Class) {
             return true;
         }
         return false;
+    }
+
+    _bindDomEvents(dom, to) {
+        if (!dom) {
+            return;
+        }
+        const events = this._getDomEvents() || {};
+        const bindEvent = to === 'on' ? on : off;
+        for (const eventName in events) {
+            bindEvent(dom, eventName, events[eventName], this);
+        }
+    }
+
+    _getDomEvents() {
+        return {
+            'mouseover': this._onDomMouseover,
+            'mouseout': this._onDomMouseout
+        };
+    }
+
+    _configMapPreventWheelScroll(preventWheelScroll) {
+        const map = this.getMap();
+        if (!map) {
+            return;
+        }
+        if (this.options.eventsPropagation) {
+            return;
+        }
+        map.options['preventWheelScroll'] = preventWheelScroll;
+    }
+
+    // eslint-disable-next-line no-unused-vars
+    _onDomMouseover(domEvent) {
+        this._configMapPreventWheelScroll(false);
+    }
+
+    // eslint-disable-next-line no-unused-vars
+    _onDomMouseout(domEvent) {
+        this._configMapPreventWheelScroll(true);
     }
 }
 
